@@ -74,7 +74,7 @@ def upload_file():
         return jsonify({"filename": unique_filename}) # 只返回文件名即可
     return jsonify({"error": "File type not allowed"}), 400
 
-@app.route('/generate', methods=['POST'], consumes='application/json')
+@app.route('/generate', methods=['POST'])
 def generate():
     data = request.json
     uploaded_filename = data.get('filename')
