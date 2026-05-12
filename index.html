@@ -243,10 +243,13 @@
 
     try {
         // 1. 发送请求给 Python 后端
-        const response = await fetch('/generate', {
-            method: 'POST',
-            body: formData
-        });
+    const response = await fetch('/generate', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ prompt: promptText })
+});
 
         // 2. 检查响应是否成功
         if (!response.ok) {
