@@ -156,11 +156,11 @@ def download_zip():
             pass # 模拟
             
     memory_file.seek(0)
-    return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='ecommerce_images.zip')
+       return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='ecommerce_images.zip')
+
+@app.route('/')
+def home():
+    return send_from_directory('.', 'index.html')
 
 if __name__ == '__main__':
-    @app.route('/')
-def home():
-    # 这里告诉 Flask，访问首页时，去当前目录找 index.html
-    return send_from_directory('.', 'index.html')
     app.run(host='0.0.0.0', port=5000, debug=True)
