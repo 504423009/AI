@@ -155,8 +155,8 @@ def download_zip():
             # zf.writestr(f"{img['id']}.jpg", r.content)
             pass # 模拟
             
-    memory_file.seek(0)
-return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='ecommerce_images.zip')
+            memory_file.seek(0)
+            return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='ecommerce_images.zip')
 
 @app.route('/')
 def home():
