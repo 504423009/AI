@@ -141,13 +141,16 @@ def generate():
 
     return jsonify({"images": generated_images})
 
-@app.route('/zip')  # 删掉后面那部分，默认就允许 GET 了
+
+@app.route('/zip')
 def download_zip():
-    data = request.json
+    data = request.get_json(silent=True) or {}  # <--- 改这一行
     images = data.get('images', [])
-    
+
     if not images:
+        # 如果没有图片，返回错误提示
         return jsonify({"error": "No images to download"}), 400
+    # ... 后面保持不变
 
     memory_file = BytesIO()
     
