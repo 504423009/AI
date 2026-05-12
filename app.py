@@ -146,17 +146,37 @@ def download_zip():
     data = request.json
     images = data.get('images', [])
     
+    if not images:
+        return jsonify({"error": "No images to download"}), 400
+
     memory_file = BytesIO()
+    
+    # 使用 'w' 模式创建 Zip 文件
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for img in images:
-            # 下载图片内容并写入zip
-            # 实际需从 URL 获取内容
-            # r = requests.get(img['url'])
-            # zf.writestr(f"{img['id']}.jpg", r.content)
-            pass # 模拟
-            
-            memory_file.seek(0)
-            return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='ecommerce_images.zip')
+        for idx, img in enumerate(images):
+            try:
+                # 获取图片的真实 URL
+                img_url = img.get('url')
+                if img_url:
+                    # 下载图片内容
+                    r = requests.get(img_url)
+                    if r.status_code == 200:
+                        # 写入 zip，文件名使用 id 或者索引
+                        filename = f"{img.get('id', f'image_{idx}')}.png"
+                        zf.writestr(filename, r.content)
+            except Exception as e:
+                print(f"Error adding image to zip: {e}")
+                continue # 跳过这张图，继续下一张
+    
+    # 注意：seek(0) 必须在 with 语句块结束之后，return 之前
+    memory_file.seek(0)
+    
+    return send_file(
+        memory_file, 
+        mimetype='application/zip', 
+        as_attachment=True, 
+        download_name='ecommerce_images.zip'
+    )
 
 @app.route('/')
 def home():
