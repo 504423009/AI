@@ -141,7 +141,7 @@ def generate():
 
     return jsonify({"images": generated_images})
 
-@app.route('/api/download-zip', methods=['POST'])
+@app.route('/zip', methods=['POST'])
 def download_zip():
     data = request.json
     images = data.get('images', [])
