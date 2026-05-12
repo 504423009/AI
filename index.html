@@ -235,21 +235,23 @@
             loadingState.classList.remove('hidden');
 
             
-             // 准备发送的数据
-    const formData = new FormData();
-    formData.append('main_prompt', mainPrompt);
-    formData.append('variant_prompt', variantPrompt);
-    formData.append('image', uploadedFile);
+    // 1. 获取输入框里的实际文字（注意 .value）
+const mainPromptText = document.getElementById('prompt-main').value;
+const variantPromptText = document.getElementById('prompt-variant').value; // 假设有这个ID
 
-    try {
-        // 1. 发送请求给 Python 后端
+try {
+    // 2. 发送 JSON 格式数据
     const response = await fetch('/generate', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ prompt: resultsArea })
-});
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        // 3. 确保 key 的名字 (main_prompt) 和 Python 后端代码里 request.json.get(...) 的名字一致
+        body: JSON.stringify({
+            main_prompt: mainPromptText,
+            variant_prompt: variantPromptText
+        })
+    });
 
         // 2. 检查响应是否成功
         if (!response.ok) {
