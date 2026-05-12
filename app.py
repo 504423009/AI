@@ -1,7 +1,7 @@
 import os
 import uuid
 import requests
-from flask import Flask, request, jsonify, send_file, send_from_directory,render_template
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from config import Config
 from werkzeug.utils import secure_filename
@@ -24,38 +24,39 @@ def allowed_file(filename):
 
 def generate_image(prompt, image_url, seed=None):
     """调用 Fal.ai API 生成图片"""
-    url = "https://fal.run/fal-ai/flux/dev"  # 使用 Flux Dev 模型，也可以换成schnell速度更快
+    url = "https://fal.run/fal-ai/flux/dev"
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
     }
-    
-    # 根据是否提供Seed来构造请求体
+
     payload = {
         "prompt": prompt,
         "image_url": image_url,
         "enable_safety_checker": True,
-        "output_format": "png" 
+        "output_format": "png"
     }
-    
+
     if seed:
         payload["seed"] = seed
-        
-    response = requests.post(url, headers=headers, json=payload)
-    
-    if response.status_code == 201:
-        data = response.json()
-        # 获取图片URL (Flux模型返回结构可能不同，需调试)
-        # 这里假设返回结构包含 image 或 images 字段
-        if 'images' in data and len(data['images']) > 0:
-             return data['images'][0]['url']
-        elif 'image' in data:
-             return data['image']['url']
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        if response.status_code == 201:
+            data = response.json()
+            # 解析返回的图片URL
+            if 'images' in data and len(data['images']) > 0:
+                return data['images'][0]['url']
+            elif 'image' in data:
+                return data['image']['url']
+            else:
+                print(f"Error parsing response: {data}")
+                return None
         else:
-            print(f"Error parsing response: {data}")
+            print(f"API Error: {response.status_code}, {response.text}")
             return None
-    else:
-        print(f"API Error: {response.status_code}, {response.text}")
+    except Exception as e:
+        print(f"Request Exception: {e}")
         return None
 
 @app.route('/api/upload', methods=['POST'])
@@ -67,11 +68,10 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        # 使用uuid避免文件名冲突
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
-        return jsonify({"filename": unique_filename, "path": file_path})
+        return jsonify({"filename": unique_filename}) # 只返回文件名即可
     return jsonify({"error": "File type not allowed"}), 400
 
 @app.route('/api/generate', methods=['POST'])
@@ -80,104 +80,122 @@ def generate():
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
     variant_prompt = data.get('variant_prompt')
-    platform = data.get('platform') # amazon or shein
-    mode = data.get('mode') # 6 or 25
+    platform = data.get('platform')
+    mode = data.get('mode')
 
     if not uploaded_filename or not main_prompt or not variant_prompt:
         return jsonify({"error": "Missing parameters"}), 400
 
-    # 构造源图片的访问URL (Fal.ai 需要公网可访问的URL)
-    # 注意：在生产环境中，这里应该上传到 S3 或者使用 ngrok 映射本地地址
-    # 为了演示，假设 VPS 有公网IP且 Flask 正在运行，这里需要处理内网穿透或临时上传逻辑
-    # 简单起见，我们假设用户上传图片后，我们将其临时托管或用户直接提供URL
-    # 在此脚本逻辑中，我们将模拟一个流程：
-    
-    # 实际逻辑：
-    # 1. 用户上传图 -> 保存到本地
-    # 2. 为了传给 Fal，我们需要一个公网 URL。
-    #    方案A: 使用 Fal 的临时上传 API (推荐)
-    #    方案B: 使用 VPS 公网 IP (需要配置 Nginx)
-    
-    # 这里为了代码完整性，我们假设通过 Fal 上传了图片并获得了 image_url
-    # 真实场景需实现 Fal 的文件上传接口
-    
+    # 1. 准备原图 URL
+    # 注意：Fal.ai 需要公网可访问的 URL。
+    # 如果是在本地或没有域名的 VPS 上运行，这里会失败。
+    # 解决方案：你需要先将图片上传到图床，或者使用 Fal 的文件上传 API。
+    # 为了演示，这里假设 uploaded_filename 是一个公网 URL，或者你需要实现 Fal 文件上传。
+
+    # 这里我们直接使用用户上传的文件路径（仅限本地测试，Fal API 无法读取本地文件）
+    # 生产环境必须实现：上传文件到 Fal 临时存储 -> 获取 URL
+    # 此处为了代码能跑通，假设用户传入的是一个公网图片链接，或者你需要修改前端逻辑
+
+    # 临时方案：如果 uploaded_filename 不是 http 开头，我们尝试读取本地文件并上传到 Fal (模拟)
+    # 实际项目中，建议在前端上传完图后，直接把图的公网链接传给后端，或者后端先上传图。
+
+    # 假设 uploaded_filename 是本地文件名，我们需要构建一个能访问的路径
+    # 但 Fal 无法访问你本地的 127.0.0.1。
+    # **重要提示**：这段代码在本地 VPS 运行时，如果不做内网穿透，Fal API 会报错找不到图片。
+    # 这里的逻辑是：如果用户传的是文件名，我们尝试构造一个本地路径（仅用于演示逻辑，实际会失败除非有公网IP）
+    # 为了演示成功，建议你在前端直接传入一个网络图片地址，或者实现 Fal 的文件上传。
+
+    # 这里假设 uploaded_filename 是一个可以直接访问的 URL (如果是本地文件，Fal 读不到)
+    source_image_url = uploaded_filename
+    if not uploaded_filename.startswith('http'):
+        # 如果是本地文件，你需要实现上传逻辑，这里暂时用一个逻辑兜底（会报错，提示你需要公网URL）
+        # 真实逻辑：使用 Fal SDK 上传文件
+        return jsonify({"error": "Fal.ai needs a public URL for the source image. Please upload source image to a public host first or implement Fal file upload."}), 400
+
     generated_images = []
-    
-    # 模拟生成过程
     total_count = 25 if mode == '25' else 6
     main_count = 20 if mode == '25' else 1
-    
-    # 1. 生成首图
-    # 这里需要根据平台规则拼接 Prompt
-    # Amazon: 纯白底，无阴影
+
+    # 提示词后缀
     suffix = "pure white background, no shadow, high quality, product photography, 8k" if platform == 'amazon' else "clean light grey background, product photography"
-    
     final_main_prompt = f"{main_prompt}, {suffix}"
-    
-    # 这里调用 API (伪代码，因为缺少 Fal 图片上传步骤)
-    # image_url = upload_to_fal(os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename))
-    
-    for i in range(main_count):
-        # 实际调用函数
-        # img_url = generate_image(final_main_prompt, image_url)
-        # 模拟返回
-        generated_images.append({
-            "id": f"main_{i+1}",
-            "url": "/static/placeholder.jpg", # 占位符
-            "prompt": final_main_prompt
-        })
-        
-    # 2. 生成变体图
-    # 变体图通常不需要纯白底，而是场景
     final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
-    
+
+    # 生成主图
+    for i in range(main_count):
+        img_url = generate_image(final_main_prompt, source_image_url)
+        if img_url:
+            # 下载图片保存到本地
+            try:
+                r = requests.get(img_url)
+                if r.status_code == 200:
+                    saved_name = f"main_{i+1}_{uuid.uuid4().hex}.png"
+                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                    with open(save_path, 'wb') as f:
+                        f.write(r.content)
+
+                    generated_images.append({
+                        "id": saved_name,
+                        "url": img_url, # 返回原链接给前端预览
+                        "prompt": final_main_prompt
+                    })
+            except Exception as e:
+                print(f"Download error: {e}")
+
+    # 生成变体图
     for i in range(5):
-        # img_url = generate_image(final_variant_prompt, image_url)
-        generated_images.append({
-            "id": f"variant_{i+1}",
-            "url": "/static/placeholder.jpg",
-            "prompt": final_variant_prompt
-        })
+        img_url = generate_image(final_variant_prompt, source_image_url)
+        if img_url:
+            try:
+                r = requests.get(img_url)
+                if r.status_code == 200:
+                    saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
+                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                    with open(save_path, 'wb') as f:
+                        f.write(r.content)
+
+                    generated_images.append({
+                        "id": saved_name,
+                        "url": img_url,
+                        "prompt": final_variant_prompt
+                    })
+            except Exception as e:
+                print(f"Download error: {e}")
+
+    if not generated_images:
+        return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
 
     return jsonify({"images": generated_images})
 
-
-@app.route('/zip')
+@app.route('/api/download_zip', methods=['POST']) # 修改为 POST
 def download_zip():
-    data = request.get_json(silent=True) or {}  # <--- 改这一行
+    data = request.get_json()
     images = data.get('images', [])
 
     if not images:
-        # 如果没有图片，返回错误提示
         return jsonify({"error": "No images to download"}), 400
-    # ... 后面保持不变
 
     memory_file = BytesIO()
-    
-    # 使用 'w' 模式创建 Zip 文件
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for idx, img in enumerate(images):
+        for img in images:
             try:
-                # 获取图片的真实 URL
                 img_url = img.get('url')
+                img_id = img.get('id', 'image')
                 if img_url:
-                    # 下载图片内容
                     r = requests.get(img_url)
                     if r.status_code == 200:
-                        # 写入 zip，文件名使用 id 或者索引
-                        filename = f"{img.get('id', f'image_{idx}')}.png"
+                        # 简单的文件名清理
+                        filename = f"{img_id}.png"
                         zf.writestr(filename, r.content)
             except Exception as e:
                 print(f"Error adding image to zip: {e}")
-                continue # 跳过这张图，继续下一张
-    
-    # 注意：seek(0) 必须在 with 语句块结束之后，return 之前
+                continue
+
     memory_file.seek(0)
-    
     return send_file(
-        memory_file, 
-        mimetype='application/zip', 
-        as_attachment=True, 
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
         download_name='ecommerce_images.zip'
     )
 
