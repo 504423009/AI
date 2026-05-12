@@ -262,7 +262,7 @@
                 const count = mode === '25' ? 25 : 6;
                 generatedImages = Array.from({length: count}, (_, i) => ({
                     id: i,
-                    url: 'https://via.placeholder.com/1080x1080.png?text=Generated+Image+' + (i+1), // 占位图
+                    url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAyNCIgaGVpZ2h0PSI3NjgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2VlZSIvPjwvc3ZnPg==', // 占位图
                     type: i === 0 ? 'Main' : 'Variant'
                 }));
 
