@@ -141,7 +141,7 @@ def generate():
 
     return jsonify({"images": generated_images})
 
-@app.route('/zip', methods=['POST'])
+@app.route('/zip')  # 删掉后面那部分，默认就允许 GET 了
 def download_zip():
     data = request.json
     images = data.get('images', [])
