@@ -1,7 +1,7 @@
 import os
 import uuid
 import requests
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_file, send_from_directory,render_template
 from flask_cors import CORS
 from config import Config
 from werkzeug.utils import secure_filename
@@ -159,4 +159,8 @@ def download_zip():
     return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='ecommerce_images.zip')
 
 if __name__ == '__main__':
+    @app.route('/')
+def home():
+    # 这里告诉 Flask，访问首页时，去当前目录找 index.html
+    return send_from_directory('.', 'index.html')
     app.run(host='0.0.0.0', port=5000, debug=True)
