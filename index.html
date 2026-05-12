@@ -234,50 +234,56 @@
             generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
             loadingState.classList.remove('hidden');
 
-            // 模拟进度条
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 1;
-                progressBar.style.width = progress + '%';
-                loadingText.innerText = `AI 正在构思创意... (${progress}%)`;
-                if(progress >= 90) clearInterval(interval);
-            }, 100);
+            
+             // 准备发送的数据
+    const formData = new FormData();
+    formData.append('main_prompt', mainPrompt);
+    formData.append('variant_prompt', variantPrompt);
+    formData.append('image', uploadedFile);
 
-            try {
-                // 这里应该调用真实的后端 API
-                // const formData = new FormData();
-                // formData.append('file', uploadedFile);
-                // const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-                // const uploadData = await uploadRes.json();
+    try {
+        // 1. 发送请求给 Python 后端
+        const response = await fetch('/generate', {
+            method: 'POST',
+            body: formData
+        });
 
-                // 模拟数据返回
-                await new Promise(r => setTimeout(r, 3000)); // 模拟网络延迟
-                
-                clearInterval(interval);
-                progressBar.style.width = '100%';
-                loadingText.innerText = '生成完成！';
+        // 2. 检查响应是否成功
+        if (!response.ok) {
+            throw new Error(`服务器错误: ${response.status}`);
+        }
 
-                // 模拟生成的图片列表
-                const mode = document.querySelector('input[name="mode"]:checked').value;
-                const count = mode === '25' ? 25 : 6;
-                generatedImages = Array.from({length: count}, (_, i) => ({
-                    id: i,
-                    url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAyNCIgaGVpZ2h0PSI3NjgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2VlZSIvPjwvc3ZnPg==', // 占位图
-                    type: i === 0 ? 'Main' : 'Variant'
-                }));
+        const data = await response.json();
 
-                renderImages();
-                loadingState.classList.add('hidden');
-                resultsArea.classList.remove('hidden');
+        // 3. 处理返回的真实图片数据
+        // 注意：这里假设后端返回的是图片路径列表
+        if (data.images && data.images.length > 0) {
+            generatedImages = data.images.map((path, index) => ({
+                id: index,
+                url: path, // 使用后端返回的真实路径
+                type: index === 0 ? 'Main' : 'Variant'
+            }));
 
-            } catch (error) {
-                console.error(error);
-                alert('生成失败，请检查控制台');
-                loadingState.classList.add('hidden');
-            } finally {
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="fas fa-rocket mr-2"></i> 重新生成';
-            }
+            // 调用保留在后面的 renderImages 函数显示图片
+            renderImages();
+
+            // 隐藏加载状态，显示结果区域
+            loadingState.classList.add('hidden');
+            resultsArea.classList.remove('hidden');
+        } else {
+            alert('生成失败：后端未返回图片数据');
+            loadingState.classList.add('hidden');
+        }
+
+    } catch (error) {
+        console.error(error);
+        alert('生成失败，请检查控制台或确保 Python 后端正在运行');
+        loadingState.classList.add('hidden');
+    } finally {
+        // 恢复按钮状态
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="fas fa-rocket mr-2"></i> 重新生成';
+    }    
         });
 
         function renderImages() {
