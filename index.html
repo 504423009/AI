@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 电商图批量生成器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .loader {
+            border-top-color: #3B82F6;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-blue-600 mb-2"><i class="fas fa-magic"></i> AI 电商图生成器</h1>
+            <p class="text-slate-500">专为 Amazon & SHEIN 打造 · 一键生成合规主图与场景图</p>
+        </header>
+
+        <!-- Main Card -->
+        <div class="glass rounded-2xl shadow-xl p-8 transition-all duration-300">
+            
+            <!-- Step 1: Upload -->
+            <div class="mb-8">
+                <h2 class="text-xl font-semibold mb-4 flex items-center text-blue-700">
+                    <span class="bg-blue-100 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center mr-3 text-sm">1</span>
+                    上传商品原图
+                </h2>
+                <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors cursor-pointer relative overflow-hidden group">
+                    <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-slate-400 mb-3 group-hover:text-blue-500 transition-colors"></i>
+                    <p class="text-slate-600 font-medium">点击或拖拽图片到此处</p>
+                    <p class="text-slate-400 text-sm mt-1">支持 JPG / PNG / WEBP</p>
+                    <div id="preview-container" class="mt-4 hidden">
+                        <img id="preview-img" src="" class="mx-auto h-32 rounded-lg shadow-md border border-slate-200">
+                        <p class="text-green-600 text-sm mt-2 font-medium"><i class="fas fa-check-circle"></i> 上传成功</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Settings -->
+            <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Platform & Mode -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4 flex items-center text-blue-700">
+                        <span class="bg-blue-100 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center mr-3 text-sm">2</span>
+                        配置参数
+                    </h2>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">目标平台</label>
+                        <div class="flex gap-4">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="platform" value="amazon" class="peer sr-only" checked>
+                                <div class="p-3 rounded-lg border-2 border-slate-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 text-center transition-all">
+                                    <i class="fab fa-amazon text-orange-500 text-xl mb-1"></i>
+                                    <div class="font-bold">Amazon</div>
+                                </div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="platform" value="shein" class="peer sr-only">
+                                <div class="p-3 rounded-lg border-2 border-slate-200 peer-checked:border-red-500 peer-checked:bg-red-50 text-center transition-all">
+                                    <span class="text-red-600 font-bold text-xl block leading-none">S</span>
+                                    <div class="font-bold">SHEIN</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">生成模式</label>
+                        <div class="flex gap-4">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="mode" value="6" class="peer sr-only" checked>
+                                <div class="p-3 rounded-lg border-2 border-slate-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 text-center transition-all">
+                                    <div class="font-bold">6 张模式</div>
+                                    <div class="text-xs text-slate-500">1主图 + 5变体</div>
+                                </div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="mode" value="25" class="peer sr-only">
+                                <div class="p-3 rounded-lg border-2 border-slate-200 peer-checked:border-blue-500 peer-checked:bg-blue-50 text-center transition-all">
+                                    <div class="font-bold">25 张模式</div>
+                                    <div class="text-xs text-slate-500">20主图 + 5变体</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prompts -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4 flex items-center text-blue-700">
+                        <span class="bg-blue-100 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center mr-3 text-sm">3</span>
+                        输入描述
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">首图描述 (主体)</label>
+                            <textarea id="prompt-main" rows="3" class="w-full rounded-lg border-slate-300 bg-slate-50 focus:border-blue-500 focus:ring focus:ring-blue-200 transition-all p-3 text-sm" placeholder="例如：白色陶瓷马克杯，简约北欧风格..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">变体图描述 (场景)</label>
+                            <textarea id="prompt-variant" rows="3" class="w-full rounded-lg border-slate-300 bg-slate-50 focus:border-blue-500 focus:ring focus:ring-blue-200 transition-all p-3 text-sm" placeholder="例如：杯子放在木质书桌上，自然光，生活场景..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Button -->
+            <div class="text-center mb-8">
+                <button id="generate-btn" class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-10 py-4 rounded-full font-bold text-lg shadow-lg hover:shadow-blue-500/30 transform hover:-translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto">
+                    <i class="fas fa-rocket mr-2"></i> 开始生成
+                </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="hidden text-center py-8">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-slate-200 h-12 w-12 mb-4 mx-auto"></div>
+                <h3 class="text-lg font-semibold text-slate-700">AI 正在绘制中...</h3>
+                <p id="loading-text" class="text-slate-500 mt-2">正在生成第 1 张图片</p>
+                <div class="w-2/3 mx-auto bg-slate-200 rounded-full h-2.5 mt-4 overflow-hidden">
+                    <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Results Grid -->
+            <div id="results-area" class="hidden">
+                <div class="flex justify-between items-center mb-6 border-b pb-2">
+                    <h2 class="text-2xl font-bold text-slate-800">生成结果</h2>
+                    <button id="download-zip-btn" class="text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-file-archive mr-2"></i>打包下载全部
+                    </button>
+                </div>
+                <div id="image-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <!-- Images will be injected here -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <span class="absolute top-5 right-5 text-white text-4xl cursor-pointer hover:text-blue-400" onclick="closeModal()">&times;</span>
+        <img id="modal-img" src="" class="max-w-full max-h-full rounded-lg shadow-2xl animate-fade-in">
+    </div>
+
+    <script>
+        // 前端逻辑
+        const fileInput = document.getElementById('file-input');
+        const previewContainer = document.getElementById('preview-container');
+        const previewImg = document.getElementById('preview-img');
+        const generateBtn = document.getElementById('generate-btn');
+        const loadingState = document.getElementById('loading-state');
+        const resultsArea = document.getElementById('results-area');
+        const imageGrid = document.getElementById('image-grid');
+        const progressBar = document.getElementById('progress-bar');
+        const loadingText = document.getElementById('loading-text');
+        const modal = document.getElementById('image-modal');
+        const modalImg = document.getElementById('modal-img');
+
+        let uploadedFile = null;
+        let generatedImages = [];
+
+        // 文件上传预览
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewContainer.classList.remove('hidden');
+                    uploadedFile = file;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 拖拽支持
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        });
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+            const file = e.dataTransfer.files[0];
+            fileInput.files = e.dataTransfer.files; // 同步到 input
+            // 触发预览逻辑
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImg.src = e.target.result;
+                previewContainer.classList.remove('hidden');
+                uploadedFile = file;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        // 生成图片
+        generateBtn.addEventListener('click', async () => {
+            if (!uploadedFile) {
+                alert('请先上传商品图片！');
+                return;
+            }
+            const mainPrompt = document.getElementById('prompt-main').value;
+            const variantPrompt = document.getElementById('prompt-variant').value;
+            if (!mainPrompt || !variantPrompt) {
+                alert('请填写完整的描述信息！');
+                return;
+            }
+
+            // UI 状态切换
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
+            loadingState.classList.remove('hidden');
+
+            // 模拟进度条
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 1;
+                progressBar.style.width = progress + '%';
+                loadingText.innerText = `AI 正在构思创意... (${progress}%)`;
+                if(progress >= 90) clearInterval(interval);
+            }, 100);
+
+            try {
+                // 这里应该调用真实的后端 API
+                // const formData = new FormData();
+                // formData.append('file', uploadedFile);
+                // const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+                // const uploadData = await uploadRes.json();
+
+                // 模拟数据返回
+                await new Promise(r => setTimeout(r, 3000)); // 模拟网络延迟
+                
+                clearInterval(interval);
+                progressBar.style.width = '100%';
+                loadingText.innerText = '生成完成！';
+
+                // 模拟生成的图片列表
+                const mode = document.querySelector('input[name="mode"]:checked').value;
+                const count = mode === '25' ? 25 : 6;
+                generatedImages = Array.from({length: count}, (_, i) => ({
+                    id: i,
+                    url: 'https://via.placeholder.com/1080x1080.png?text=Generated+Image+' + (i+1), // 占位图
+                    type: i === 0 ? 'Main' : 'Variant'
+                }));
+
+                renderImages();
+                loadingState.classList.add('hidden');
+                resultsArea.classList.remove('hidden');
+
+            } catch (error) {
+                console.error(error);
+                alert('生成失败，请检查控制台');
+                loadingState.classList.add('hidden');
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<i class="fas fa-rocket mr-2"></i> 重新生成';
+            }
+        });
+
+        function renderImages() {
+            imageGrid.innerHTML = '';
+            generatedImages.forEach(img => {
+                const div = document.createElement('div');
+                div.className = 'group relative aspect-square rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all cursor-pointer border border-slate-100';
+                div.innerHTML = `
+                    <img src="${img.url}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" onclick="openModal('${img.url}')">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                        <i class="fas fa-search-plus text-white text-2xl opacity-0 group-hover:opacity-100 transform scale-0 group-hover:scale-100 transition-all"></i>
+                    </div>
+                    <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-2 translate-y-full group-hover:translate-y-0 transition-transform">
+                        ${img.type} Image
+                    </div>
+                `;
+                imageGrid.appendChild(div);
+            });
+        }
+
+        function openModal(src) {
+            modalImg.src = src;
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+        }
+
+        // 关闭模态框点击遮罩
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        // 下载 ZIP
+        document.getElementById('download-zip-btn').addEventListener('click', () => {
+            alert('正在打包下载... (此功能需后端支持)');
+            // window.location.href = '/api/download-zip';
+        });
+    </script>
+</body>
+</html>
