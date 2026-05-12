@@ -313,10 +313,9 @@
         });
 
         // 下载 ZIP
-        document.getElementById('download-zip-btn').addEventListener('click', () => {
-            alert('正在打包下载... (此功能需后端支持)');
-            // window.location.href = '/api/download-zip';
-        });
+document.getElementById('download-zip-btn').addEventListener('click', () => {
+    window.location.href = '/zip'; // 请求后端的 /zip 路由
+});
     </script>
 </body>
 </html>
