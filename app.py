@@ -112,8 +112,8 @@ def generate():
     # 这里假设 uploaded_filename 是一个可以直接访问的 URL (如果是本地文件，Fal 读不到)
     if not uploaded_filename.startswith('http'):
             source_image_url = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
-else:
-    source_image_url = uploaded_filename
+    else:
+            source_image_url = uploaded_filename
 
     generated_images = []
     total_count = 25 if mode == '25' else 6
