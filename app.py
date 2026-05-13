@@ -126,11 +126,12 @@ def generate():
     final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
 
     # 生成主图
-    for i in range(main_count):
-        img_url = generate_image(final_main_prompt, source_image_url)
+for i in range(main_count):
+    img_url = generate_image(final_main_prompt, source_image_url)
     if img_url:
-        print(f"开始下载图片: {img_url}")
+        # 下载图片保存到本地
         try:
+            print(f"开始下载图片: {img_url}")
             r = requests.get(img_url, timeout=30)
             print(f"下载状态码: {r.status_code}")
             if r.status_code == 200:
