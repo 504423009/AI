@@ -12,9 +12,6 @@ app = Flask(__name__)
 app.config.from_object(Config)
 CORS(app)
 
-@app.route('/')
-def home():
-    return "Hello! 程序运行正常，这是 GitHub 更新的版本！"
     
 # 确保目录存在
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
