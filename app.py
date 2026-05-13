@@ -241,7 +241,7 @@ def download_zip():
     images = data.get('images', [])
     if not images:
         return jsonify({"error": "No images to download"}), 400
-    
+
     memory_file = BytesIO()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
         for img_url in images:
@@ -256,7 +256,7 @@ def download_zip():
             except Exception as e:
                 print(f"Error adding image to zip: {e}")
                 continue
-    
+
     memory_file.seek(0)
     return send_file(
         memory_file,
