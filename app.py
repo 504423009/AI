@@ -127,24 +127,27 @@ def generate():
 
     # 生成主图
     for i in range(main_count):
-        img_url = generate_image(final_main_prompt, source_image_url)
-        if img_url:
-            # 下载图片保存到本地
-            try:
-                r = requests.get(img_url)
-                if r.status_code == 200:
-                    saved_name = f"main_{i+1}_{uuid.uuid4().hex}.png"
-                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
-                    with open(save_path, 'wb') as f:
-                        f.write(r.content)
-
-                    generated_images.append({
-                        "id": saved_name,
-                        "url": img_url, # 返回原链接给前端预览
-                        "prompt": final_main_prompt
-                    })
-            except Exception as e:
-                print(f"Download error: {e}")
+    img_url = generate_image(final_main_prompt, source_image_url)
+    if img_url:
+        print(f"开始下载图片: {img_url}")
+        try:
+            r = requests.get(img_url, timeout=30)
+            print(f"下载状态码: {r.status_code}")
+            if r.status_code == 200:
+                saved_name = f"main_{i+1}_{uuid.uuid4().hex}.png"
+                save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                print(f"保存路径: {save_path}")
+                with open(save_path, 'wb') as f:
+                    f.write(r.content)
+                print(f"图片保存成功: {save_path}")
+                generated_images.append({
+                    "url": f"/generated_images/{saved_name}",
+                    "prompt": final_main_prompt
+                })
+        except Exception as e:
+            print(f"下载图片失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     # 生成变体图
     for i in range(5):
