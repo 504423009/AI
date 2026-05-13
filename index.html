@@ -261,10 +261,15 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        filename: uploadedFile.realName, // 👈 改成存好的真实文件名
-                        main_prompt: mainPromptText,
-                        variant_prompt: variantPromptText,
-                    })
+    filename: uploadedFile.realName,
+    main_prompt: mainPromptText,
+    variant_prompt: variantPromptText,
+    
+    // 只新增这两行，其他完全不动
+    platform: document.querySelector('input[name="platform"]:checked').value,
+    mode: document.querySelector('input[name="mode"]:checked').value
+})
+                
                 });
 
                 if (!response.ok) {
