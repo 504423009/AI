@@ -234,7 +234,10 @@ def serve_uploaded_image(filename):
 from io import BytesIO
 import zipfile
 
-# 下载ZIP接口（原有 /api/download_zip 接口，保持不变）
+# 下载ZIP接口（同时支持 /api/download_zip 和 /zip 两个路径，无冲突版）
+from io import BytesIO
+import zipfile
+
 @app.route('/api/download_zip', methods=['POST'])
 def download_zip():
     data = request.get_json()
@@ -263,7 +266,6 @@ def download_zip():
         download_name='ecommerce_images.zip'
     )
 
-# 前端 /zip 接口，兼容旧请求，调用上面的下载函数
 @app.route('/zip', methods=['POST'])
 def download_zip_legacy():
     return download_zip()
