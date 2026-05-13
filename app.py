@@ -234,6 +234,7 @@ def serve_uploaded_image(filename):
 from io import BytesIO
 import zipfile
 
+# 下载ZIP接口（支持前端 /zip 请求，也支持原有 /api/download_zip）
 @app.route('/api/download_zip', methods=['POST'])
 @app.route('/zip', methods=['POST'])
 def download_zip():
@@ -243,7 +244,7 @@ def download_zip():
         return jsonify({"error": "No images to download"}), 400
 
     memory_file = BytesIO()
-    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(memory_file, w, zipfile.ZIP_DEFLATED) as zf:
         for img_url in images:
             try:
                 # 从URL中提取文件名
