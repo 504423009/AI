@@ -198,6 +198,7 @@
                     .then(response => response.json())
                     .then(data => {
                         console.log('Success:', data);
+                        uploadedFile.realName = data.filename; // 👈 就加这一行
                     })
                     .catch(error => {
                         console.error('Error:', error);
@@ -260,7 +261,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        filename: "test_image.jpg",
+                        filename: uploadedFile.realName, // 👈 改成存好的真实文件名
                         main_prompt: mainPromptText,
                         variant_prompt: variantPromptText,
                     })
