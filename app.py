@@ -12,7 +12,6 @@ app = Flask(__name__)
 app.config.from_object(Config)
 CORS(app)
 
-    
 # 确保目录存在
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
@@ -82,12 +81,13 @@ def generate():
     # 👇 就在这里插入这两行打印代码
     print("🔍 收到原始请求数据:", request.get_data(as_text=True))
     print("🔍 解析后的 JSON:", request.json)
+    
     data = request.json
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
     variant_prompt = data.get('variant_prompt')
-    platform = data.get('platform', 'amazon')  # 默认值设为 'amazon'
-    mode = data.get('mode', '6')              # 默认值设为 '6'
+    platform = data.get('platform', 'amazon') # 默认值设为 'amazon'
+    mode = data.get('mode', '6') # 默认值设为 '6'
 
     if not uploaded_filename or not main_prompt or not variant_prompt:
         return jsonify({"error": "Missing parameters"}), 400
@@ -97,21 +97,13 @@ def generate():
     # 如果是在本地或没有域名的 VPS 上运行，这里会失败。
     # 解决方案：你需要先将图片上传到图床，或者使用 Fal 的文件上传 API。
     # 为了演示，这里假设 uploaded_filename 是一个公网 URL，或者你需要实现 Fal 文件上传。
-
-    # 这里我们直接使用用户上传的文件路径（仅限本地测试，Fal API 无法读取本地文件）
-    # 生产环境必须实现：上传文件到 Fal 临时存储 -> 获取 URL
-    # 此处为了代码能跑通，假设用户传入的是一个公网图片链接，或者你需要修改前端逻辑
-
     # 临时方案：如果 uploaded_filename 不是 http 开头，我们尝试读取本地文件并上传到 Fal (模拟)
     # 实际项目中，建议在前端上传完图后，直接把图的公网链接传给后端，或者后端先上传图。
-
-    # 假设 uploaded_filename 是本地文件名，我们需要构建一个能访问的路径
+    # 这里假设 uploaded_filename 是本地文件名，我们需要构建一个能访问的路径
     # 但 Fal 无法访问你本地的 127.0.0.1。
     # **重要提示**：这段代码在本地 VPS 运行时，如果不做内网穿透，Fal API 会报错找不到图片。
     # 这里的逻辑是：如果用户传的是文件名，我们尝试构造一个本地路径（仅用于演示逻辑，实际会失败除非有公网IP）
     # 为了演示成功，建议你在前端直接传入一个网络图片地址，或者实现 Fal 的文件上传。
-
-    # 这里假设 uploaded_filename 是一个可以直接访问的 URL (如果是本地文件，Fal 读不到)
     if not uploaded_filename.startswith('http'):
         source_image_url = f"http://187.127.116.168:5000/uploads/{uploaded_filename}"
     else:
@@ -156,7 +148,7 @@ def generate():
         img_url = generate_image(final_variant_prompt, source_image_url)
         if img_url:
             try:
-                r = requests.get(img_url, timeout=30)  # ✅ 加超时，防止卡住
+                r = requests.get(img_url, timeout=30) # ✅ 加超时，防止卡住
                 if r.status_code == 200:
                     saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
@@ -164,13 +156,13 @@ def generate():
                         f.write(r.content)
                     generated_images.append({
                         "id": saved_name,
-                        "url": f"/generated_images/{saved_name}",  # ✅ 核心：统一返回本地路径
+                        "url": f"/generated_images/{saved_name}", # ✅ 核心：统一返回本地路径
                         "prompt": final_variant_prompt
                     })
             except Exception as e:
                 print(f"Download error: {e}")
                 import traceback
-                traceback.print_exc()  # ✅ 打印完整错误堆栈，方便排查
+                traceback.print_exc() # ✅ 打印完整错误堆栈，方便排查
 
     if not generated_images:
         return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
@@ -183,7 +175,7 @@ def generate():
         elif isinstance(img, str):
             safe_images.append(img)
 
-    print("### 最终返回给前端的链接：", safe_images)  # 在终端打印看看
+    print("### 最终返回给前端的链接：", safe_images) # 在终端打印看看
     return jsonify({"images": safe_images})
 
 @app.route('/api/download_zip', methods=['POST']) # 修改为 POST
@@ -221,7 +213,8 @@ def download_zip():
 @app.route('/')
 def home():
     return send_from_directory('.', 'index.html')
-    # 生成图片的静态访问路由
+
+# 生成图片的静态访问路由
 @app.route('/generated_images/<filename>')
 def serve_generated_image(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename)
@@ -230,42 +223,9 @@ def serve_generated_image(filename):
 @app.route('/uploads/<filename>')
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 # 下载ZIP接口（同时支持 /api/download_zip 和 /zip 两个路径，完美兼容前后端）
-from io import BytesIO
-import zipfile
-
-# 下载ZIP接口（同时支持 /api/download_zip 和 /zip 两个路径，无冲突版）
-from io import BytesIO
-import zipfile
-
-@app.route('/api/download_zip', methods=['POST'])
-def download_zip():
-    data = request.get_json()
-    images = data.get('images', [])
-    if not images:
-        return jsonify({"error": "No images to download"}), 400
-
-    memory_file = BytesIO()
-    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for img_url in images:
-            try:
-                filename = img_url.split('/')[-1]
-                file_path = os.path.join(app.config['GENERATED_FOLDER'], filename)
-                if os.path.exists(file_path):
-                    with open(file_path, 'rb') as f:
-                        zf.writestr(filename, f.read())
-            except Exception as e:
-                print(f"Error adding image to zip: {e}")
-                continue
-
-    memory_file.seek(0)
-    return send_file(
-        memory_file,
-        mimetype='application/zip',
-        as_attachment=True,
-        download_name='ecommerce_images.zip'
-    )
-
+# 注意：这里不再定义新的 download_zip 函数，直接复用上面的
 @app.route('/zip', methods=['POST'])
 def download_zip_legacy():
     return download_zip()
