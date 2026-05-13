@@ -173,7 +173,7 @@ for i in range(5):
             traceback.print_exc()  # ✅ 打印完整错误堆栈，方便排查
 
     if not generated_images:
-    return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
+        return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
 
 # 数据清洗：只提取有效的图片链接
 safe_images = []
