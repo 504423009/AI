@@ -174,7 +174,16 @@ def generate():
     if not generated_images:
         return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
 
-    return jsonify({"images": generated_images})
+        # 数据清洗：只提取有效的图片链接
+    safe_images = []
+    for img in generated_images:
+        if isinstance(img, dict) and 'url' in img:
+            safe_images.append(img['url'])
+        elif isinstance(img, str):
+            safe_images.append(img)
+
+    print("### 最终返回给前端的链接：", safe_images)  # 在终端打印看看
+    return jsonify({"images": safe_images})
 
 @app.route('/api/download_zip', methods=['POST']) # 修改为 POST
 def download_zip():
