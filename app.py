@@ -110,11 +110,10 @@ def generate():
     # 为了演示成功，建议你在前端直接传入一个网络图片地址，或者实现 Fal 的文件上传。
 
     # 这里假设 uploaded_filename 是一个可以直接访问的 URL (如果是本地文件，Fal 读不到)
-    source_image_url = uploaded_filename
     if not uploaded_filename.startswith('http'):
-        # 如果是本地文件，你需要实现上传逻辑，这里暂时用一个逻辑兜底（会报错，提示你需要公网URL）
-        # 真实逻辑：使用 Fal SDK 上传文件
-        return jsonify({"error": "Fal.ai needs a public URL for the source image. Please upload source image to a public host first or implement Fal file upload."}), 400
+    source_image_url = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
+else:
+    source_image_url = uploaded_filename
 
     generated_images = []
     total_count = 25 if mode == '25' else 6
