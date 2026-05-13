@@ -230,6 +230,40 @@ def serve_generated_image(filename):
 @app.route('/uploads/<filename>')
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+# 下载ZIP接口（同时支持 /api/download_zip 和 /zip 两个路径，完美兼容前后端）
+from io import BytesIO
+import zipfile
+
+@app.route('/api/download_zip', methods=['POST'])
+@app.route('/zip', methods=['POST'])
+def download_zip():
+    data = request.get_json()
+    images = data.get('images', [])
+    if not images:
+        return jsonify({"error": "No images to download"}), 400
+    
+    memory_file = BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for img_url in images:
+            try:
+                # 从URL中提取文件名
+                filename = img_url.split('/')[-1]
+                # 读取本地文件
+                file_path = os.path.join(app.config['GENERATED_FOLDER'], filename)
+                if os.path.exists(file_path):
+                    with open(file_path, 'rb') as f:
+                        zf.writestr(filename, f.read())
+            except Exception as e:
+                print(f"Error adding image to zip: {e}")
+                continue
+    
+    memory_file.seek(0)
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='ecommerce_images.zip'
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
