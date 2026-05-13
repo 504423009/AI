@@ -76,6 +76,9 @@ def upload_file():
 
 @app.route('/generate', methods=['POST'])
 def generate():
+    # 👇 就在这里插入这两行打印代码
+    print("🔍 收到原始请求数据:", request.get_data(as_text=True))
+    print("🔍 解析后的 JSON:", request.json)
     data = request.json
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
