@@ -171,7 +171,7 @@ for i in range(main_count):
                 print(f"Download error: {e}")
 
     if not generated_images:
-                return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
+        return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
 
     return jsonify({"images": generated_images})
 
