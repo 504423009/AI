@@ -233,25 +233,29 @@
             generateBtn.disabled = true;
             generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
             loadingState.classList.remove('hidden');
+            // 1. 获取输入框的内容
+    // 注意：确保 'prompt-main' 是你 HTML 输入框的 ID
+    const mainPromptText = document.getElementById('prompt-main').value;
+
+    try {
+        // 2. 发送请求
+        const response = await fetch('/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json', // 告诉后端这是 JSON
+            },
+            // 3. 重点：这里的 key 必须和 Python 后端 data.get('...') 里的名字一模一样！
+            body: JSON.stringify({
+                filename: "test_image.jpg",      // 先写死一个假文件名，绕过后端的检查
+                main_prompt: mainPromptText,     // 发送用户输入的提示词
+                variant_prompt: ""               // 如果没有变体，发空字符串
+            })
+        });
 
             
-    // 1. 获取输入框里的实际文字（注意 .value）
-const mainPromptText = document.getElementById('prompt-main').value;
-const variantPromptText = document.getElementById('prompt-variant').value; // 假设有这个ID
+    
 
-try {
-    // 2. 发送 JSON 格式数据
-    const response = await fetch('/generate', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        // 3. 确保 key 的名字 (main_prompt) 和 Python 后端代码里 request.json.get(...) 的名字一致
-        body: JSON.stringify({
-            main_prompt: mainPromptText,
-            variant_prompt: variantPromptText
-        })
-    });
+        // ...后面原本处理 response 的代码不要动...
 
         // 2. 检查响应是否成功
         if (!response.ok) {
