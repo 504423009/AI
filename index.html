@@ -187,6 +187,22 @@
                     previewContainer.classList.remove('hidden');
                     uploadedFile = file;
                 }
+                        // 自动上传到服务器
+        const formData = new FormData();
+        formData.append('file', file); // 关键：名字必须是 'file'
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Success:', data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert("上传失败，请看黑窗口报错");
+        });
                 reader.readAsDataURL(file);
             }
         });
