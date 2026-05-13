@@ -252,6 +252,7 @@
             // 1. 获取输入框的内容
     // 注意：确保 'prompt-main' 是你 HTML 输入框的 ID
     const mainPromptText = document.getElementById('prompt-main').value;
+            const variantPromptText = document.getElementById('variant-prompt').value;
 
     try {
         // 2. 发送请求
@@ -261,13 +262,13 @@
                 'Content-Type': 'application/json', // 告诉后端这是 JSON
             },
             // 3. 重点：这里的 key 必须和 Python 后端 data.get('...') 里的名字一模一样！
-            const variantPromptText = document.getElementById('variant-prompt').value;
+            
             body: JSON.stringify({
                 filename: "test_image.jpg",      // 先写死一个假文件名，绕过后端的检查
                 main_prompt: mainPromptText,     // 发送用户输入的提示词
                 variant_prompt: variantPromptText, // 发送变体提示词
             }),
-        });
+        }),
 
             
     
