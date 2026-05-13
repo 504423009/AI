@@ -248,7 +248,7 @@
             body: JSON.stringify({
                 filename: "test_image.jpg",      // 先写死一个假文件名，绕过后端的检查
                 main_prompt: mainPromptText,     // 发送用户输入的提示词
-                variant_prompt: ""               // 如果没有变体，发空字符串
+                variant_prompt: variantPromptText,  // 发送变体提示词
             })
         });
 
