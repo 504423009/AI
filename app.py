@@ -43,7 +43,7 @@ def generate_image(prompt, image_url, seed=None):
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
-        if response.status_code == 201:
+        if response.status_code == 200:
             data = response.json()
             # 解析返回的图片URL
             if 'images' in data and len(data['images']) > 0:
@@ -113,7 +113,7 @@ def generate():
 
     # 这里假设 uploaded_filename 是一个可以直接访问的 URL (如果是本地文件，Fal 读不到)
     if not uploaded_filename.startswith('http'):
-        source_image_url = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
+        source_image_url = f"http://187.127.116.168:5000/uploads/{uploaded_filename}"
     else:
         source_image_url = uploaded_filename
 
@@ -152,24 +152,25 @@ def generate():
                 traceback.print_exc()
 
     # 生成变体图
-    for i in range(5):
-        img_url = generate_image(final_variant_prompt, source_image_url)
-        if img_url:
-            try:
-                r = requests.get(img_url)
-                if r.status_code == 200:
-                    saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
-                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
-                    with open(save_path, 'wb') as f:
-                        f.write(r.content)
-
-                    generated_images.append({
-                        "id": saved_name,
-                        "url": img_url,
-                        "prompt": final_variant_prompt
-                    })
-            except Exception as e:
-                print(f"Download error: {e}")
+for i in range(5):
+    img_url = generate_image(final_variant_prompt, source_image_url)
+    if img_url:
+        try:
+            r = requests.get(img_url, timeout=30)  # ✅ 加超时，防止卡住
+            if r.status_code == 200:
+                saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
+                save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                with open(save_path, 'wb') as f:
+                    f.write(r.content)
+                generated_images.append({
+                    "id": saved_name,
+                    "url": f"/generated_images/{saved_name}",  # ✅ 核心：统一返回本地路径
+                    "prompt": final_variant_prompt
+                })
+        except Exception as e:
+            print(f"Download error: {e}")
+            import traceback
+            traceback.print_exc()  # ✅ 打印完整错误堆栈，方便排查
 
     if not generated_images:
         return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
@@ -220,6 +221,15 @@ def download_zip():
 @app.route('/')
 def home():
     return send_from_directory('.', 'index.html')
+    # 生成图片的静态访问路由
+@app.route('/generated_images/<filename>')
+def serve_generated_image(filename):
+    return send_from_directory(app.config['GENERATED_FOLDER'], filename)
+
+# 上传图片的静态访问路由（让fal.ai能读到用户上传的原图）
+@app.route('/uploads/<filename>')
+def serve_uploaded_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
