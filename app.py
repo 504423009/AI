@@ -127,7 +127,7 @@ def generate():
 
     # 生成主图
     for i in range(main_count):
-    img_url = generate_image(final_main_prompt, source_image_url)
+        img_url = generate_image(final_main_prompt, source_image_url)
     if img_url:
         print(f"开始下载图片: {img_url}")
         try:
