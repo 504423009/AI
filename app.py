@@ -84,8 +84,8 @@ def generate():
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
     variant_prompt = data.get('variant_prompt')
-    platform = data.get('platform')
-    mode = data.get('mode')
+    platform = data.get('platform', 'amazon')  # 默认值设为 'amazon'
+    mode = data.get('mode', '6')              # 默认值设为 '6'
 
     if not uploaded_filename or not main_prompt or not variant_prompt:
         return jsonify({"error": "Missing parameters"}), 400
