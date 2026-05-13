@@ -152,39 +152,39 @@ def generate():
                 traceback.print_exc()
 
     # 生成变体图
-for i in range(5):
-    img_url = generate_image(final_variant_prompt, source_image_url)
-    if img_url:
-        try:
-            r = requests.get(img_url, timeout=30)  # ✅ 加超时，防止卡住
-            if r.status_code == 200:
-                saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
-                save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
-                with open(save_path, 'wb') as f:
-                    f.write(r.content)
-                generated_images.append({
-                    "id": saved_name,
-                    "url": f"/generated_images/{saved_name}",  # ✅ 核心：统一返回本地路径
-                    "prompt": final_variant_prompt
-                })
-        except Exception as e:
-            print(f"Download error: {e}")
-            import traceback
-            traceback.print_exc()  # ✅ 打印完整错误堆栈，方便排查
+    for i in range(5):
+        img_url = generate_image(final_variant_prompt, source_image_url)
+        if img_url:
+            try:
+                r = requests.get(img_url, timeout=30)  # ✅ 加超时，防止卡住
+                if r.status_code == 200:
+                    saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
+                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                    with open(save_path, 'wb') as f:
+                        f.write(r.content)
+                    generated_images.append({
+                        "id": saved_name,
+                        "url": f"/generated_images/{saved_name}",  # ✅ 核心：统一返回本地路径
+                        "prompt": final_variant_prompt
+                    })
+            except Exception as e:
+                print(f"Download error: {e}")
+                import traceback
+                traceback.print_exc()  # ✅ 打印完整错误堆栈，方便排查
 
     if not generated_images:
         return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
 
-# 数据清洗：只提取有效的图片链接
-safe_images = []
-for img in generated_images:
-    if isinstance(img, dict) and 'url' in img:
-        safe_images.append(img['url'])
-    elif isinstance(img, str):
-        safe_images.append(img)
+    # 数据清洗：只提取有效的图片链接
+    safe_images = []
+    for img in generated_images:
+        if isinstance(img, dict) and 'url' in img:
+            safe_images.append(img['url'])
+        elif isinstance(img, str):
+            safe_images.append(img)
 
-print("### 最终返回给前端的链接：", safe_images)  # 在终端打印看看
-return jsonify({"images": safe_images})
+    print("### 最终返回给前端的链接：", safe_images)  # 在终端打印看看
+    return jsonify({"images": safe_images})
 
 @app.route('/api/download_zip', methods=['POST']) # 修改为 POST
 def download_zip():
