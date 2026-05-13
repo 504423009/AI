@@ -234,9 +234,8 @@ def serve_uploaded_image(filename):
 from io import BytesIO
 import zipfile
 
-# 下载ZIP接口（支持前端 /zip 请求，也支持原有 /api/download_zip）
+# 下载ZIP接口（原有 /api/download_zip 接口，保持不变）
 @app.route('/api/download_zip', methods=['POST'])
-@app.route('/zip', methods=['POST'])
 def download_zip():
     data = request.get_json()
     images = data.get('images', [])
@@ -244,12 +243,10 @@ def download_zip():
         return jsonify({"error": "No images to download"}), 400
 
     memory_file = BytesIO()
-    with zipfile.ZipFile(memory_file, w, zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
         for img_url in images:
             try:
-                # 从URL中提取文件名
                 filename = img_url.split('/')[-1]
-                # 读取本地文件
                 file_path = os.path.join(app.config['GENERATED_FOLDER'], filename)
                 if os.path.exists(file_path):
                     with open(file_path, 'rb') as f:
@@ -265,6 +262,11 @@ def download_zip():
         as_attachment=True,
         download_name='ecommerce_images.zip'
     )
+
+# 前端 /zip 接口，兼容旧请求，调用上面的下载函数
+@app.route('/zip', methods=['POST'])
+def download_zip_legacy():
+    return download_zip()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
