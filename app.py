@@ -59,7 +59,7 @@ def generate_image(prompt, image_url, seed=None):
     except Exception as e:
         print(f"Request Exception: {e}")
         return None
-
+@app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
