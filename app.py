@@ -30,7 +30,7 @@ def generate_image(prompt, image_path, seed=None):
     if seed is None:
         seed = 42
 
-    # 阿里云官方测试图（确保能通）
+    # 阿里云官方测试图（确保公网可访问）
     image_public_url = "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg"
 
     API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
@@ -56,32 +56,41 @@ def generate_image(prompt, image_path, seed=None):
     }
 
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=20)
+        # 1. 创建任务（短超时，不卡这里）
+        response = requests.post(url, headers=headers, json=data, timeout=15)
         result = response.json()
         print("异步任务创建:", result)
 
         if "task_id" not in result:
+            print("创建任务失败，无task_id")
             return None
 
         task_id = result["task_id"]
         query_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
 
-        # 轮询查结果（更短等待，不超时）
-        for _ in range(15):
-            time.sleep(2)
-            res = requests.get(query_url, headers={"Authorization": f"Bearer {API_KEY}"}, timeout=10)
-            task = res.json()
+        # 2. 轮询（更短间隔 + 异常捕获，避免单次请求卡住）
+        for _ in range(12):  # 12次 × 2秒 = 24秒，刚好在超时前完成
+            try:
+                time.sleep(2)
+                res = requests.get(query_url, headers={"Authorization": f"Bearer {API_KEY}"}, timeout=8)
+                task = res.json()
+                print("轮询任务状态:", task.get("output", {}).get("task_status"))
 
-            if "output" not in task:
+                if "output" not in task:
+                    continue
+
+                status = task["output"]["task_status"]
+                if status == "SUCCEEDED":
+                    return task["output"]["results"][0]["url"]
+                if status in ["FAILED", "CANCELED"]:
+                    print("任务失败:", task)
+                    return None
+
+            except Exception as e:
+                print("轮询请求异常，继续重试:", e)
                 continue
 
-            if task["output"]["task_status"] == "SUCCEEDED":
-                return task["output"]["results"][0]["url"]
-            if task["output"]["task_status"] == "FAILED":
-                print("任务失败", task)
-                return None
-
-        print("任务超时")
+        print("轮询超时，任务未完成")
         return None
 
     except Exception as e:
