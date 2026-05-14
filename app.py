@@ -43,7 +43,7 @@ def generate_image(prompt, image_url, seed=None):
     )
 
     data = {
-        "model": "image2image-v1",
+        "model": "wanx-image2image-v1",
         "input": {
             "image_url": image_url,
             "prompt": protect_prompt,
