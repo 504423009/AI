@@ -31,7 +31,7 @@ def generate_image(prompt, image_path, seed=None):
     # 阿里云官方测试图（先确保能跑通）
     image_public_url = "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg"
 
-    API_KEY = "你的百炼API_KEY"
+    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 
     headers = {
