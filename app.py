@@ -1,7 +1,8 @@
 import os
 import uuid
 import requests
-from flask import Flask, request, jsonify, send_file, send_from_directory
+import base64  # 需要新增这个库
+from flask import Flask, request, jsonify, send_file, send_from_directory, session
 from flask_cors import CORS
 from config import Config
 from werkzeug.utils import secure_filename
@@ -23,39 +24,50 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def generate_image(prompt, image_url, seed=None):
-    import requests
+def generate_image(prompt, image_path, seed=None): # 参数名改为 image_path，更准确
+    # 1. 读取本地图片并转换为 Base64
+    try:
+        # 检查文件是否存在
+        if not os.path.exists(image_path):
+            # 如果传进来的是文件名而不是绝对路径，尝试拼接
+            upload_folder = app.config['UPLOAD_FOLDER']
+            image_path = os.path.join(upload_folder, image_path)
+        
+        with open(image_path, "rb") as f:
+            image_base64 = base64.b64encode(f.read()).decode('utf-8')
+    except Exception as e:
+        print(f"读取本地图片失败: {e}")
+        return None
 
-    # 你的 API Key
-    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274" # 这里填你的实际Key
-
-    # 接口地址：使用图像生成/编辑的统一入口
+    # 2. API 配置 (保持不变)
+    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274" 
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/image-editing"
 
-    # 修正 Header 写法
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
-        "X-DashScope-Async": "enable" # 建议开启异步，生图比较慢
+        "X-DashScope-Async": "enable" 
     }
 
-    # 核心参数构建
+    # 3. 核心参数构建 (使用 image_base64 替代 image_url)
     data = {
-        "model": "wanx-style-repaint-v1", # 推荐使用专门做背景生成的模型
+        "model": "wanx-style-repaint-v1", 
         "input": {
-            "image_url": image_url,
+            "image_base64": image_base64, # ✅ 关键修改：直接传图片数据
             "prompt": prompt
         },
         "parameters": {
-            "style": "normal", # 风格，可选 normal, cartoon, sketch 等
+            "style": "normal", 
             "seed": seed or 42,
-            "n": 1 # 生成1张图
+            "n": 1 
         }
     }
 
     try:
         response = requests.post(url, headers=headers, json=data, timeout=60)
         result = response.json()
+        
+        # 4. 解析结果
         if "output" in result and "results" in result["output"]:
             return result["output"]["results"][0]["url"]
         else:
@@ -64,7 +76,7 @@ def generate_image(prompt, image_url, seed=None):
     except Exception as e:
         print("请求失败：", e)
         return None
-        
+
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
@@ -78,7 +90,7 @@ def upload_file():
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
-        return jsonify({"filename": unique_filename}) # 只返回文件名即可
+        return jsonify({"filename": unique_filename}) 
     return jsonify({"error": "File type not allowed"}), 400
 
 @app.route('/generate', methods=['POST'])
@@ -86,7 +98,7 @@ def generate():
     from flask import session
     session['current_generated_files'] = []
     os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-    # 👇 就在这里插入这两行打印代码
+    
     print("🔍 收到原始请求数据:", request.get_data(as_text=True))
     print("🔍 解析后的 JSON:", request.json)
     
@@ -94,28 +106,14 @@ def generate():
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
     variant_prompt = data.get('variant_prompt')
-    platform = data.get('platform', 'amazon') # 默认值设为 'amazon'
-    mode = data.get('mode', '6') # 默认值设为 '6'
+    platform = data.get('platform', 'amazon') 
+    mode = data.get('mode', '6') 
 
     if not uploaded_filename or not main_prompt or not variant_prompt:
         return jsonify({"error": "Missing parameters"}), 400
 
-    # 1. 准备原图 URL
-    # 注意：Fal.ai 需要公网可访问的 URL。
-    # 如果是在本地或没有域名的 VPS 上运行，这里会失败。
-    # 解决方案：你需要先将图片上传到图床，或者使用 Fal 的文件上传 API。
-    # 为了演示，这里假设 uploaded_filename 是一个公网 URL，或者你需要实现 Fal 文件上传。
-    # 临时方案：如果 uploaded_filename 不是 http 开头，我们尝试读取本地文件并上传到 Fal (模拟)
-    # 实际项目中，建议在前端上传完图后，直接把图的公网链接传给后端，或者后端先上传图。
-    # 这里假设 uploaded_filename 是本地文件名，我们需要构建一个能访问的路径
-    # 但 Fal 无法访问你本地的 127.0.0.1。
-    # **重要提示**：这段代码在本地 VPS 运行时，如果不做内网穿透，Fal API 会报错找不到图片。
-    # 这里的逻辑是：如果用户传的是文件名，我们尝试构造一个本地路径（仅用于演示逻辑，实际会失败除非有公网IP）
-    # 为了演示成功，建议你在前端直接传入一个网络图片地址，或者实现 Fal 的文件上传。
-    if not uploaded_filename.startswith('http'):
-        source_image_url = f"http://187.127.116.168:5000/uploads/{uploaded_filename}"
-    else:
-        source_image_url = uploaded_filename
+    # 1. 准备原图 (注意：这里的 uploaded_filename 只是文件名，generate_image 函数内部会去读取本地文件)
+    source_image_path = uploaded_filename # 直接传文件名，函数内部会拼接路径
 
     generated_images = []
     total_count = 25 if mode == '25' else 6
@@ -128,7 +126,7 @@ def generate():
 
     # 生成主图
     for i in range(main_count):
-        img_url = generate_image(final_main_prompt, source_image_url)
+        img_url = generate_image(final_main_prompt, source_image_path) # 传入本地路径
         if img_url:
             # 下载图片保存到本地
             try:
@@ -154,10 +152,10 @@ def generate():
 
     # 生成变体图
     for i in range(5):
-        img_url = generate_image(final_variant_prompt, source_image_url)
+        img_url = generate_image(final_variant_prompt, source_image_path)
         if img_url:
             try:
-                r = requests.get(img_url, timeout=30) # ✅ 加超时，防止卡住
+                r = requests.get(img_url, timeout=30)
                 if r.status_code == 200:
                     saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
@@ -168,13 +166,13 @@ def generate():
                     
                     generated_images.append({
                         "id": saved_name,
-                        "url": f"/generated_images/{saved_name}", # ✅ 核心：统一返回本地路径
+                        "url": f"/generated_images/{saved_name}",
                         "prompt": final_variant_prompt
                     })
             except Exception as e:
                 print(f"Download error: {e}")
                 import traceback
-                traceback.print_exc() # ✅ 打印完整错误堆栈，方便排查
+                traceback.print_exc()
 
     if not generated_images:
         return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
@@ -187,10 +185,10 @@ def generate():
         elif isinstance(img, str):
             safe_images.append(img)
 
-    print("### 最终返回给前端的链接：", safe_images) # 在终端打印看看
+    print("### 最终返回给前端的链接：", safe_images)
     return jsonify({"images": safe_images})
 
-@app.route('/api/download_zip', methods=['POST']) # 修改为 POST
+@app.route('/api/download_zip', methods=['POST'])
 def download_zip():
     data = request.get_json()
     images = data.get('images', [])
@@ -231,7 +229,7 @@ def home():
 def serve_generated_image(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename)
 
-# 上传图片的静态访问路由（让fal.ai能读到用户上传的原图）
+# 上传图片的静态访问路由
 @app.route('/uploads/<filename>')
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
