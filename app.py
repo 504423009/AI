@@ -26,18 +26,16 @@ def allowed_file(filename):
 
 def generate_image(prompt, image_path, seed=None):
     """
-    适配百炼平台官方示例的万相风格重绘API调用
+    适配百炼平台最新规范的万相风格重绘API调用
     """
     if seed is None:
         seed = 42
 
-    # --------------------------
-    # 注意：本地图片必须换成公网可访问URL
-    # 这里先用阿里云示例图测试，确保接口能通
-    # --------------------------
+    # 1. 公网可访问的图片URL（先用官方示例图测试）
+    # 等接口通了再换成你自己的公网图片地址
     image_public_url = "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg"
 
-    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"  # 用控制台生成的Key替换
+    API_KEY = "你的百炼新API_KEY"
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 
     headers = {
@@ -45,14 +43,16 @@ def generate_image(prompt, image_path, seed=None):
         "Content-Type": "application/json"
     }
 
+    # 2. 关键修复：新版接口必须在 input 里传 style_index
+    # style_index 支持的值：0-10，对应不同风格，1 代表通用风格（normal）
     data = {
         "model": "wanx-style-repaint-v1",
         "input": {
             "image_url": image_public_url,
-            "prompt": prompt
+            "prompt": prompt,
+            "style_index": 1  # ✅ 必须加上这个参数，1 = 通用/正常风格
         },
         "parameters": {
-            "style": "normal",
             "seed": seed,
             "n": 1
         }
@@ -72,7 +72,7 @@ def generate_image(prompt, image_path, seed=None):
     except Exception as e:
         print("请求失败：", e)
         return None
-
+        
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
