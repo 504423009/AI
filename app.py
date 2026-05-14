@@ -27,10 +27,9 @@ def generate_image(prompt, image_url, seed=None):
     import requests
     import json
 
-    # 👇 把这里改成你自己的阿里云API-KEY
     API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
 
-    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis"
+    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/image-editing"
     
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -43,13 +42,14 @@ def generate_image(prompt, image_url, seed=None):
     )
 
     data = {
-        "model": "wanx-image2image-v1",
+        "model": "wan2.7-image",  # ✅ 阿里最新最强图生图，未下架
         "input": {
             "image_url": image_url,
             "prompt": protect_prompt,
             "negative_prompt": "修改商品,变形,变色,改款式,改细节",
         },
         "parameters": {
+            "operation": "inpainting",  # ✅ 只改背景，不动产品
             "strength": 0.1,
             "scale": 7.5,
             "size": "1024*1024"
