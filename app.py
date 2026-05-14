@@ -159,6 +159,9 @@ def generate():
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
+                    print(f"图片保存成功: {save_path}")
+                    session['current_generated_files'].append(save_path)
+                    
                     generated_images.append({
                         "id": saved_name,
                         "url": f"/generated_images/{saved_name}", # ✅ 核心：统一返回本地路径
