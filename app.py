@@ -24,7 +24,7 @@ def allowed_file(filename):
 
 def generate_image(prompt, image_url, seed=None):
     """调用 Fal.ai API 生成图片"""
-    url = "https://fal.run/fal-ai/stable-diffusion-xl"
+    url = "https://fal.run/fal-ai/stable-diffusion-v35-large"
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
