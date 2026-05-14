@@ -27,9 +27,8 @@ def generate_image(prompt, image_url, seed=None):
     import requests
     import json
 
-    # ====================== 【你只改这一行！】 ======================
+    # 👇 把这里改成你自己的阿里云API-KEY
     API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
-    # ================================================================
 
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis"
     
@@ -70,12 +69,7 @@ def generate_image(prompt, image_url, seed=None):
     except Exception as e:
         print("请求出错:", e)
         return None
-        else:
-            print(f"API Error: {response.status_code}, {response.text}")
-            return None
-    except Exception as e:
-        print(f"Request Exception: {e}")
-        return None
+        
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
