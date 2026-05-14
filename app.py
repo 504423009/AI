@@ -225,43 +225,39 @@ def serve_generated_image(filename):
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# 下载ZIP接口（独立实现，绕过JSON校验）
+# 下载ZIP接口（独立实现，绕过JSON校验，只打包当前会话图片）
 @app.route('/zip', methods=['GET'])
 def download_zip_legacy():
     import os
     import zipfile
     from io import BytesIO
+    from flask import make_response, send_file, session
 
-    # 这里用你项目里实际存图片的文件夹，和 GENERATED_FOLDER 保持一致
-    folder_to_zip = app.config['GENERATED_FOLDER']
-    zip_filename = 'ecommerce_images.zip'
+    # 核心：只读取当前会话生成的图片列表
+    session_images = session.get('current_generated_files', [])
+    if not session_images:
+        return "本次会话未生成任何图片，无法打包下载", 200
 
-    # 检查文件夹是否存在且有文件
-    if not os.path.exists(folder_to_zip) or len(os.listdir(folder_to_zip)) == 0:
-        return "还没有生成任何图片，无法打包下载", 200
-
-    # 在内存里生成zip文件，避免写磁盘
+    # 只打包本次生成的图片，不会包含历史文件
     memory_file = BytesIO()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(folder_to_zip):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, folder_to_zip)
-                zipf.write(file_path, arcname)
+        for img_path in session_images:
+            if os.path.exists(img_path):
+                filename = os.path.basename(img_path)
+                zipf.write(img_path, filename)
+
     memory_file.seek(0)
 
     # 强制设置响应头，绕过JSON校验
-    from flask import make_response, send_file
     response = make_response(
         send_file(
             memory_file,
             mimetype='application/zip',
             as_attachment=True,
-            download_name=zip_filename
+            download_name='本次生成图片.zip'
         )
     )
     response.headers['Content-Type'] = 'application/zip'
-    response.headers['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
     return response
 
 if __name__ == '__main__':
