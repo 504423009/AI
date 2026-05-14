@@ -24,39 +24,39 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_image(prompt, image_url, seed=None):
-    # 换成 RealVisXL V4.0 接口
-    url = "https://fal.run/fal-ai/realvisxl-v4.0"
+    # 最稳电商模型：SDXL 1.0
+    url = "https://fal.run/fal-ai/stable-diffusion-xl-v1-base"
+
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
     }
 
-    # 最强电商保护提示词
-    protect_prompt = "电商产品摄影，产品主体100%锁定，颜色、款式、细节完全不变，不修改、不扭曲，仅优化背景与光影，"
+    # 强制保护：产品100%不变，只改背景
+    protect_prompt = "产品主体完全保持不变，颜色、款式、形状、细节100%保留，不修改、不变形、不扭曲，仅更换背景、优化光影，"
     final_prompt = protect_prompt + prompt
 
+    # 核心：ControlNet 锁死产品
     payload = {
         "prompt": final_prompt,
         "image_url": image_url,
-        "image_strength": 0.05, # 极限保真
-        "steps": 30,
+        "image_strength": 0.1,
+        "steps": 28,
         "cfg_scale": 7.5,
-        # 加ControlNet锁死产品轮廓
+        "enable_safety_checker": True,
+        "output_format": "png",
         "controlnets": [
             {
                 "type": "canny",
                 "image_url": image_url,
-                "strength": 1.0 # 最强控制，完全跟着轮廓走
+                "strength": 1.0
             }
-        ],
-        "enable_safety_checker": True,
-        "output_format": "png"
+        ]
     }
 
     if seed:
         payload["seed"] = seed
 
-    # 下面的try/except和返回逻辑和原来完全一样
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         if response.status_code == 200:
