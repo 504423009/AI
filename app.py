@@ -24,49 +24,52 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_image(prompt, image_url, seed=None):
-    # 换回你原来的、100%可用的接口
-    url = "https://fal.run/fal-ai/flux/dev"
+    import requests
+    import json
+
+    # ====================== 【你只改这一行！】 ======================
+    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
+    # ================================================================
+
+    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis"
+    
     headers = {
-        "Authorization": f"Key {app.config['FAL_KEY']}",
+        "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
 
-    # 电商专用最强保护词
-    protect_prompt = "电商产品摄影，产品主体100%锁定，形状、颜色、材质、细节完全不变，不做任何修改、不扭曲、不变形，仅优化背景和光影，前景无任何改动，"
-    final_prompt = protect_prompt + prompt
+    protect_prompt = (
+        "商品主体完全保持原样，不修改、不变形、不改颜色、不改款式、不改细节，"
+        "仅修改背景和整体光影，前景产品无任何改动，" + prompt
+    )
 
-    payload = {
-        "prompt": final_prompt,
-        "image_url": image_url,
-        "enable_safety_checker": True,
-        "output_format": "png",
-        "image_strength": 0.05,  # 极限保真，几乎不重绘
-        "steps": 30,
-        "cfg_scale": 8,
-        # 关键：Flux 原生支持的 ControlNet，锁死产品轮廓
-        "controlnets": [
-            {
-                "type": "canny",
-                "image_url": image_url,
-                "strength": 1.0  # 最强控制，产品轮廓完全跟着原图走
-            }
-        ]
+    data = {
+        "model": "image2image-v1",
+        "input": {
+            "image_url": image_url,
+            "prompt": protect_prompt,
+            "negative_prompt": "修改商品,变形,变色,改款式,改细节",
+        },
+        "parameters": {
+            "strength": 0.1,
+            "scale": 7.5,
+            "size": "1024*1024"
+        }
     }
 
-    if seed:
-        payload["seed"] = seed
-
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        if response.status_code == 200:
-            data = response.json()
-            if 'images' in data and len(data['images']) > 0:
-                return data['images'][0]['url']
-            elif 'image' in data:
-                return data['image']['url']
-            else:
-                print(f"Error parsing response: {data}")
-                return None
+        response = requests.post(url, headers=headers, json=data, timeout=90)
+        result = response.json()
+
+        if "output" in result and "results" in result["output"]:
+            return result["output"]["results"][0]["url"]
+        else:
+            print("阿里接口返回异常:", result)
+            return None
+
+    except Exception as e:
+        print("请求出错:", e)
+        return None
         else:
             print(f"API Error: {response.status_code}, {response.text}")
             return None
