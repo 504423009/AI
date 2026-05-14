@@ -23,51 +23,46 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def generate_image(prompt, image_url, seed=None):
+ddef generate_image(prompt, image_url, seed=None):
     import requests
-    import json
 
-    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
+    # 你的 API Key
+    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274" # 这里填你的实际Key
 
+    # 接口地址：使用图像生成/编辑的统一入口
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/image-editing"
-    
+
+    # 修正 Header 写法
     headers = {
         "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable" # 建议开启异步，生图比较慢
     }
 
-    protect_prompt = (
-        "商品主体完全保持原样，不修改、不变形、不改颜色、不改款式、不改细节，"
-        "仅修改背景和整体光影，前景产品无任何改动，" + prompt
-    )
-
+    # 核心参数构建
     data = {
-        "model": "wan2.7-image",  # ✅ 阿里最新最强图生图，未下架
+        "model": "wanx-style-repaint-v1", # 推荐使用专门做背景生成的模型
         "input": {
             "image_url": image_url,
-            "prompt": protect_prompt,
-            "negative_prompt": "修改商品,变形,变色,改款式,改细节",
+            "prompt": prompt
         },
         "parameters": {
-            "operation": "inpainting",  # ✅ 只改背景，不动产品
-            "strength": 0.1,
-            "scale": 7.5,
-            "size": "1024*1024"
+            "style": "normal", # 风格，可选 normal, cartoon, sketch 等
+            "seed": seed or 42,
+            "n": 1 # 生成1张图
         }
     }
 
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=90)
+        response = requests.post(url, headers=headers, json=data, timeout=60)
         result = response.json()
-
         if "output" in result and "results" in result["output"]:
             return result["output"]["results"][0]["url"]
         else:
-            print("阿里接口返回异常:", result)
+            print("阿里接口返回异常：", result)
             return None
-
     except Exception as e:
-        print("请求出错:", e)
+        print("请求失败：", e)
         return None
         
 @app.route('/upload', methods=['POST'])
