@@ -25,32 +25,27 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_image(prompt, image_path, seed=None):
-    """
-    适配百炼平台最新规范的万相风格重绘API调用
-    """
     if seed is None:
         seed = 42
 
-    # 1. 公网可访问的图片URL（先用官方示例图测试）
-    # 等接口通了再换成你自己的公网图片地址
+    # 阿里云官方测试图（先确保能跑通）
     image_public_url = "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg"
 
-    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
+    API_KEY = "你的百炼API_KEY"
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 
     headers = {
         "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable"  # 开启异步
     }
 
-    # 2. 关键修复：新版接口必须在 input 里传 style_index
-    # style_index 支持的值：0-10，对应不同风格，1 代表通用风格（normal）
     data = {
         "model": "wanx-style-repaint-v1",
         "input": {
             "image_url": image_public_url,
             "prompt": prompt,
-            "style_index": 1  # ✅ 必须加上这个参数，1 = 通用/正常风格
+            "style_index": 1
         },
         "parameters": {
             "seed": seed,
@@ -61,16 +56,31 @@ def generate_image(prompt, image_path, seed=None):
     try:
         response = requests.post(url, headers=headers, json=data, timeout=60)
         result = response.json()
-        
-        print("阿里API返回:", result)
+        print("异步任务创建:", result)
 
-        if "output" in result and "results" in result["output"]:
-            return result["output"]["results"][0]["url"]
-        else:
-            print("阿里接口返回异常：", result)
+        if "task_id" not in result:
             return None
+
+        task_id = result["task_id"]
+        query_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
+
+        # 轮询查结果
+        for _ in range(20):
+            time.sleep(3)
+            res = requests.get(query_url, headers={"Authorization": f"Bearer {API_KEY}"})
+            task = res.json()
+
+            if task["output"]["task_status"] == "SUCCEEDED":
+                return task["output"]["results"][0]["url"]
+            if task["output"]["task_status"] == "FAILED":
+                print("任务失败", task)
+                return None
+
+        print("超时")
+        return None
+
     except Exception as e:
-        print("请求失败：", e)
+        print("错误", e)
         return None
         
 @app.route('/upload', methods=['POST'])
