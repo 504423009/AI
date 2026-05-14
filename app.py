@@ -227,7 +227,7 @@ def serve_uploaded_image(filename):
 
 # 下载ZIP接口（同时支持 /api/download_zip 和 /zip 两个路径，完美兼容前后端）
 # 注意：这里不再定义新的 download_zip 函数，直接复用上面的
-@app.route('/zip', methods=['POST'])
+@app.route('/zip', methods=['GET', 'POST'])
 def download_zip_legacy():
     return download_zip()
 
