@@ -24,29 +24,39 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_image(prompt, image_url, seed=None):
-    url = "https://fal.run/fal-ai/flux/dev"
+    # 换成 RealVisXL V4.0 接口
+    url = "https://fal.run/fal-ai/realvisxl-v4.0"
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
     }
 
-    # 产品保护提示词拼接（不影响任何功能）
-    protect_prompt = "前景产品主体完全锁定，形状、颜色、材质、细节100%保留，不做任何修改、不扭曲、不变形、不改变比例，仅修改背景和整体光影，前景无任何改动，"
+    # 最强电商保护提示词
+    protect_prompt = "电商产品摄影，产品主体100%锁定，颜色、款式、细节完全不变，不修改、不扭曲，仅优化背景与光影，"
     final_prompt = protect_prompt + prompt
 
     payload = {
         "prompt": final_prompt,
         "image_url": image_url,
+        "image_strength": 0.05, # 极限保真
+        "steps": 30,
+        "cfg_scale": 7.5,
+        # 加ControlNet锁死产品轮廓
+        "controlnets": [
+            {
+                "type": "canny",
+                "image_url": image_url,
+                "strength": 1.0 # 最强控制，完全跟着轮廓走
+            }
+        ],
         "enable_safety_checker": True,
-        "output_format": "png",
-        "image_strength": 0.05,
-        "steps": 25,
-        "cfg_scale": 7
+        "output_format": "png"
     }
 
     if seed:
         payload["seed"] = seed
 
+    # 下面的try/except和返回逻辑和原来完全一样
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         if response.status_code == 200:
