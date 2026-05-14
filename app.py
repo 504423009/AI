@@ -225,13 +225,43 @@ def serve_generated_image(filename):
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# 下载ZIP接口（同时支持 /api/download_zip 和 /zip 两个路径，完美兼容前后端）
-# 注意：这里不再定义新的 download_zip 函数，直接复用上面的
+# 下载ZIP接口（独立实现，绕过JSON校验）
 @app.route('/zip', methods=['GET'])
 def download_zip_legacy():
-    from flask import make_response
-    response = make_response(download_zip())
+    import os
+    import zipfile
+    from io import BytesIO
+
+    # 这里用你项目里实际存图片的文件夹，和 GENERATED_FOLDER 保持一致
+    folder_to_zip = app.config['GENERATED_FOLDER']
+    zip_filename = 'ecommerce_images.zip'
+
+    # 检查文件夹是否存在且有文件
+    if not os.path.exists(folder_to_zip) or len(os.listdir(folder_to_zip)) == 0:
+        return "还没有生成任何图片，无法打包下载", 200
+
+    # 在内存里生成zip文件，避免写磁盘
+    memory_file = BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(folder_to_zip):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, folder_to_zip)
+                zipf.write(file_path, arcname)
+    memory_file.seek(0)
+
+    # 强制设置响应头，绕过JSON校验
+    from flask import make_response, send_file
+    response = make_response(
+        send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=zip_filename
+        )
+    )
     response.headers['Content-Type'] = 'application/zip'
+    response.headers['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
     return response
 
 if __name__ == '__main__':
