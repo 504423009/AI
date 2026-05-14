@@ -24,32 +24,31 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_image(prompt, image_url, seed=None):
-    # 最稳电商模型：SDXL 1.0
-    url = "https://fal.run/fal-ai/stable-diffusion-xl-v1-base"
-
+    # 换回你原来的、100%可用的接口
+    url = "https://fal.run/fal-ai/flux/dev"
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
     }
 
-    # 强制保护：产品100%不变，只改背景
-    protect_prompt = "产品主体完全保持不变，颜色、款式、形状、细节100%保留，不修改、不变形、不扭曲，仅更换背景、优化光影，"
+    # 电商专用最强保护词
+    protect_prompt = "电商产品摄影，产品主体100%锁定，形状、颜色、材质、细节完全不变，不做任何修改、不扭曲、不变形，仅优化背景和光影，前景无任何改动，"
     final_prompt = protect_prompt + prompt
 
-    # 核心：ControlNet 锁死产品
     payload = {
         "prompt": final_prompt,
         "image_url": image_url,
-        "image_strength": 0.1,
-        "steps": 28,
-        "cfg_scale": 7.5,
         "enable_safety_checker": True,
         "output_format": "png",
+        "image_strength": 0.05,  # 极限保真，几乎不重绘
+        "steps": 30,
+        "cfg_scale": 8,
+        # 关键：Flux 原生支持的 ControlNet，锁死产品轮廓
         "controlnets": [
             {
                 "type": "canny",
                 "image_url": image_url,
-                "strength": 1.0
+                "strength": 1.0  # 最强控制，产品轮廓完全跟着原图走
             }
         ]
     }
@@ -74,7 +73,6 @@ def generate_image(prompt, image_url, seed=None):
     except Exception as e:
         print(f"Request Exception: {e}")
         return None
-
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
