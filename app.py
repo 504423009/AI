@@ -30,40 +30,40 @@ def generate_image(prompt, image_url, seed=None):
         "Content-Type": "application/json"
     }
 
-    # 产品保护提示词拼接（不影响任何功能）
-    protect_prompt = "电商产品摄影，产品主体100%保留，形状、颜色、细节、比例完全不变，不修改产品结构，不扭曲、不变形，仅优化背景与光影，"
-    final_prompt = protect_prompt + prompt
+# 产品保护提示词拼接（不影响任何功能）
+protect_prompt = "前景产品主体完全锁定，形状、颜色、材质、细节100%保留，不做任何修改、不扭曲、不变形、不改变比例，仅修改背景和整体光影，前景无任何改动，"
+final_prompt = protect_prompt + prompt
 
-    payload = {
-        "prompt": final_prompt,
-        "image_url": image_url,
-        "enable_safety_checker": True,
-        "output_format": "png",
-        "image_strength": 0.1,
-        "steps": 25,
-        "cfg_scale": 7
-    }
+payload = {
+    "prompt": final_prompt,
+    "image_url": image_url,
+    "enable_safety_checker": True,
+    "output_format": "png",
+    "image_strength": 0.05,
+    "steps": 25,
+    "cfg_scale": 7
+}
 
-    if seed:
-        payload["seed"] = seed
+if seed:
+    payload["seed"] = seed
 
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        if response.status_code == 200:
-            data = response.json()
-            if 'images' in data and len(data['images']) > 0:
-                return data['images'][0]['url']
-            elif 'image' in data:
-                return data['image']['url']
-            else:
-                print(f"Error parsing response: {data}")
-                return None
+try:
+    response = requests.post(url, headers=headers, json=payload, timeout=60)
+    if response.status_code == 200:
+        data = response.json()
+        if 'images' in data and len(data['images']) > 0:
+            return data['images'][0]['url']
+        elif 'image' in data:
+            return data['image']['url']
         else:
-            print(f"API Error: {response.status_code}, {response.text}")
+            print(f"Error parsing response: {data}")
             return None
-    except Exception as e:
-        print(f"Request Exception: {e}")
+    else:
+        print(f"API Error: {response.status_code}, {response.text}")
         return None
+except Exception as e:
+    print(f"Request Exception: {e}")
+    return None
 
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
