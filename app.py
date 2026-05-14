@@ -24,7 +24,7 @@ def allowed_file(filename):
 
 def generate_image(prompt, image_url, seed=None):
     """调用 Fal.ai API 生成图片"""
-    url = "https://fal.run/fal-ai/flux/dev"
+    url = "https://fal.run/fal-ai/stable-diffusion-xl"
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
@@ -34,7 +34,8 @@ def generate_image(prompt, image_url, seed=None):
         "prompt": prompt,
         "image_url": image_url,
         "enable_safety_checker": True,
-        "output_format": "png"
+        "output_format": "png",
+        "strength": 0.6,  # 👈 就加在这一行（注意上一行要加逗号）
     }
 
     if seed:
