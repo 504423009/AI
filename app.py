@@ -1,7 +1,7 @@
 import os
 import uuid
+import base64  # 新增：用于图片编码
 import requests
-import base64  # 需要新增这个库
 from flask import Flask, request, jsonify, send_file, send_from_directory, session
 from flask_cors import CORS
 from config import Config
@@ -10,7 +10,7 @@ import zipfile
 from io import BytesIO
 
 app = Flask(__name__)
-app.secret_key = 'any-random-string-you-like'  # 随便写个字符串，比如 'my-secret-123'
+app.secret_key = 'any-random-string-you-like'
 app.config.from_object(Config)
 CORS(app)
 
@@ -24,42 +24,48 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def generate_image(prompt, image_path, seed=None): # 参数名改为 image_path，更准确
-    # 1. 读取本地图片并转换为 Base64
+def generate_image(prompt, image_path, seed=None):
+    """
+    修复版：读取本地图片路径，转为Base64发送给阿里云
+    """
+    # 1. 设置 Seed
+    if seed is None:
+        seed = 42
+    
+    # 2. 处理图片路径（确保是绝对路径）
+    if not os.path.isabs(image_path):
+        image_path = os.path.join(os.getcwd(), image_path)
+
+    # 3. 读取图片并转为 Base64
     try:
-        # 检查文件是否存在
-        if not os.path.exists(image_path):
-            # 如果传进来的是文件名而不是绝对路径，尝试拼接
-            upload_folder = app.config['UPLOAD_FOLDER']
-            image_path = os.path.join(upload_folder, image_path)
-        
-        with open(image_path, "rb") as f:
-            image_base64 = base64.b64encode(f.read()).decode('utf-8')
+        with open(image_path, "rb") as image_file:
+            # 将图片二进制数据编码为字符串
+            image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
     except Exception as e:
         print(f"读取本地图片失败: {e}")
         return None
 
-    # 2. API 配置 (保持不变)
+    # 4. API 配置
     API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274" 
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/image-editing"
-
+    
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
         "X-DashScope-Async": "enable" 
     }
 
-    # 3. 核心参数构建 (使用 image_base64 替代 image_url)
+    # 5. 构建请求体 (关键点：使用 image_base64 而不是 image_url)
     data = {
-        "model": "wanx-style-repaint-v1", 
+        "model": "wanx-style-repaint-v1",
         "input": {
-            "image_base64": image_base64, # ✅ 关键修改：直接传图片数据
+            "image_base64": image_base64,  # ✅ 这里改了！直接发图片数据
             "prompt": prompt
         },
         "parameters": {
-            "style": "normal", 
-            "seed": seed or 42,
-            "n": 1 
+            "style": "normal",
+            "seed": seed,
+            "n": 1
         }
     }
 
@@ -67,7 +73,9 @@ def generate_image(prompt, image_path, seed=None): # 参数名改为 image_path�
         response = requests.post(url, headers=headers, json=data, timeout=60)
         result = response.json()
         
-        # 4. 解析结果
+        # 调试打印
+        print("阿里API返回:", result)
+
         if "output" in result and "results" in result["output"]:
             return result["output"]["results"][0]["url"]
         else:
@@ -90,30 +98,28 @@ def upload_file():
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
+        # 返回相对路径，generate 函数里会处理
         return jsonify({"filename": unique_filename}) 
     return jsonify({"error": "File type not allowed"}), 400
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    from flask import session
     session['current_generated_files'] = []
     os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-    
-    print("🔍 收到原始请求数据:", request.get_data(as_text=True))
-    print("🔍 解析后的 JSON:", request.json)
     
     data = request.json
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
     variant_prompt = data.get('variant_prompt')
-    platform = data.get('platform', 'amazon') 
-    mode = data.get('mode', '6') 
+    platform = data.get('platform', 'amazon')
+    mode = data.get('mode', '6')
 
     if not uploaded_filename or not main_prompt or not variant_prompt:
         return jsonify({"error": "Missing parameters"}), 400
 
-    # 1. 准备原图 (注意：这里的 uploaded_filename 只是文件名，generate_image 函数内部会去读取本地文件)
-    source_image_path = uploaded_filename # 直接传文件名，函数内部会拼接路径
+    # 1. 准备原图路径 (传给 generate_image 函数的是本地路径)
+    # 因为 generate_image 现在支持读取本地文件，所以直接拼接本地路径即可
+    source_image_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
 
     generated_images = []
     total_count = 25 if mode == '25' else 6
@@ -128,18 +134,13 @@ def generate():
     for i in range(main_count):
         img_url = generate_image(final_main_prompt, source_image_path) # 传入本地路径
         if img_url:
-            # 下载图片保存到本地
             try:
-                print(f"开始下载图片: {img_url}")
                 r = requests.get(img_url, timeout=30)
-                print(f"下载状态码: {r.status_code}")
                 if r.status_code == 200:
                     saved_name = f"main_{i+1}_{uuid.uuid4().hex}.png"
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
-                    print(f"保存路径: {save_path}")
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
-                    print(f"图片保存成功: {save_path}")
                     session['current_generated_files'].append(save_path)
                     generated_images.append({
                         "url": f"/generated_images/{saved_name}",
@@ -147,12 +148,10 @@ def generate():
                     })
             except Exception as e:
                 print(f"下载图片失败: {e}")
-                import traceback
-                traceback.print_exc()
 
     # 生成变体图
     for i in range(5):
-        img_url = generate_image(final_variant_prompt, source_image_path)
+        img_url = generate_image(final_variant_prompt, source_image_path) # 传入本地路径
         if img_url:
             try:
                 r = requests.get(img_url, timeout=30)
@@ -161,9 +160,7 @@ def generate():
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
-                    print(f"图片保存成功: {save_path}")
                     session['current_generated_files'].append(save_path)
-                    
                     generated_images.append({
                         "id": saved_name,
                         "url": f"/generated_images/{saved_name}",
@@ -171,13 +168,10 @@ def generate():
                     })
             except Exception as e:
                 print(f"Download error: {e}")
-                import traceback
-                traceback.print_exc()
 
     if not generated_images:
-        return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
+        return jsonify({"error": "Failed to generate any images. Check console logs."}), 500
 
-    # 数据清洗：只提取有效的图片链接
     safe_images = []
     for img in generated_images:
         if isinstance(img, dict) and 'url' in img:
@@ -185,7 +179,6 @@ def generate():
         elif isinstance(img, str):
             safe_images.append(img)
 
-    print("### 最终返回给前端的链接：", safe_images)
     return jsonify({"images": safe_images})
 
 @app.route('/api/download_zip', methods=['POST'])
@@ -205,7 +198,6 @@ def download_zip():
                 if img_url:
                     r = requests.get(img_url)
                     if r.status_code == 200:
-                        # 简单的文件名清理
                         filename = f"{img_id}.png"
                         zf.writestr(filename, r.content)
             except Exception as e:
@@ -224,30 +216,20 @@ def download_zip():
 def home():
     return send_from_directory('.', 'index.html')
 
-# 生成图片的静态访问路由
 @app.route('/generated_images/<filename>')
 def serve_generated_image(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename)
 
-# 上传图片的静态访问路由
 @app.route('/uploads/<filename>')
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# 下载ZIP接口（独立实现，绕过JSON校验，只打包当前会话图片）
 @app.route('/zip', methods=['GET'])
 def download_zip_legacy():
-    import os
-    import zipfile
-    from io import BytesIO
-    from flask import make_response, send_file, session
-
-    # 核心：只读取当前会话生成的图片列表
     session_images = session.get('current_generated_files', [])
     if not session_images:
         return "本次会话未生成任何图片，无法打包下载", 200
 
-    # 只打包本次生成的图片，不会包含历史文件
     memory_file = BytesIO()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for img_path in session_images:
@@ -256,8 +238,6 @@ def download_zip_legacy():
                 zipf.write(img_path, filename)
 
     memory_file.seek(0)
-
-    # 强制设置响应头，绕过JSON校验
     response = make_response(
         send_file(
             memory_file,
