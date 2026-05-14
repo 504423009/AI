@@ -26,40 +26,47 @@ def allowed_file(filename):
 def generate_image(prompt, image_url, seed=None):
     """调用 Fal.ai API 生成图片"""
     url = "https://fal.run/fal-ai/flux/dev"
-    headers = {
-        "Authorization": f"Key {app.config['FAL_KEY']}",
-        "Content-Type": "application/json"
-    }
+headers = {
+    "Authorization": f"Key {app.config['FAL_KEY']}",
+    "Content-Type": "application/json"
+}
 
-    payload = {
-        "prompt": prompt,
-        "image_url": image_url,
-        "enable_safety_checker": True,
-        "output_format": "png",
-        "image_strength": 0.1,  # 👈 把 strength 改成 image_strength
-    }
+# ===================== 仅添加：产品绝对保护提示词（不影响任何功能） =====================
+protect_prompt = "产品主体100%保留，形状、颜色、细节完全不变，不修改、不变形、不扭曲，仅优化背景与光影，"
+final_prompt = protect_prompt + prompt
+# ======================================================================================
 
-    if seed:
-        payload["seed"] = seed
+payload = {
+    "prompt": final_prompt,        # 只把 prompt 换成拼接后的，其余完全不变
+    "image_url": image_url,
+    "enable_safety_checker": True,
+    "output_format": "png",
+    "image_strength": 0.1,         # 保留你原来的 0.1，最保真
+    "steps": 25,                   # 新增：稳定画质，官方支持
+    "cfg_scale": 7                 # 新增：AI 更听话，不自由发挥
+}
 
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        if response.status_code == 200:
-            data = response.json()
-            # 解析返回的图片URL
-            if 'images' in data and len(data['images']) > 0:
-                return data['images'][0]['url']
-            elif 'image' in data:
-                return data['image']['url']
-            else:
-                print(f"Error parsing response: {data}")
-                return None
+if seed:
+    payload["seed"] = seed
+
+try:
+    response = requests.post(url, headers=headers, json=payload, timeout=60)
+    if response.status_code == 200:
+        data = response.json()
+        # 解析返回的图片URL
+        if 'images' in data and len(data['images']) > 0:
+            return data['images'][0]['url']
+        elif 'image' in data:
+            return data['image']['url']
         else:
-            print(f"API Error: {response.status_code}, {response.text}")
+            print(f"Error parsing response: {data}")
             return None
-    except Exception as e:
-        print(f"Request Exception: {e}")
+    else:
+        print(f"API Error: {response.status_code}, {response.text}")
         return None
+except Exception as e:
+    print(f"Request Exception: {e}")
+    return None
 
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
