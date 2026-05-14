@@ -35,7 +35,7 @@ def generate_image(prompt, image_url, seed=None):
         "image_url": image_url,
         "enable_safety_checker": True,
         "output_format": "png",
-        "image_strength": 0.25,  # 👈 把 strength 改成 image_strength
+        "image_strength": 0.1,  # 👈 把 strength 改成 image_strength
     }
 
     if seed:
