@@ -23,7 +23,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-ddef generate_image(prompt, image_url, seed=None):
+def generate_image(prompt, image_url, seed=None):
     import requests
 
     # 你的 API Key
