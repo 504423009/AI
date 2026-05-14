@@ -54,7 +54,7 @@ def create_image_task(prompt, seed=None):
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
         print("✅ 创建任务成功:", result.get("task_id"))
-        return result.get("task_id")
+        return result.get("output", {}).get("task_id")
     except Exception as e:
         print("❌ 创建任务失败:", e)
         return None
