@@ -26,40 +26,29 @@ def allowed_file(filename):
 
 def generate_image(prompt, image_path, seed=None):
     """
-    修复版：读取本地图片路径，转为Base64发送给阿里云
+    适配百炼平台官方示例的万相风格重绘API调用
     """
-    # 1. 设置 Seed
     if seed is None:
         seed = 42
-    
-    # 2. 处理图片路径（确保是绝对路径）
-    if not os.path.isabs(image_path):
-        image_path = os.path.join(os.getcwd(), image_path)
 
-    # 3. 读取图片并转为 Base64
-    try:
-        with open(image_path, "rb") as image_file:
-            # 将图片二进制数据编码为字符串
-            image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
-    except Exception as e:
-        print(f"读取本地图片失败: {e}")
-        return None
+    # --------------------------
+    # 注意：本地图片必须换成公网可访问URL
+    # 这里先用阿里云示例图测试，确保接口能通
+    # --------------------------
+    image_public_url = "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg"
 
-    # 4. API 配置
-    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274" 
-    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/image-editing"
-    
+    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"  # 用控制台生成的Key替换
+    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
+
     headers = {
         "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "X-DashScope-Async": "enable" 
+        "Content-Type": "application/json"
     }
 
-    # 5. 构建请求体 (关键点：使用 image_base64 而不是 image_url)
     data = {
         "model": "wanx-style-repaint-v1",
         "input": {
-            "image_base64": image_base64,  # ✅ 这里改了！直接发图片数据
+            "image_url": image_public_url,
             "prompt": prompt
         },
         "parameters": {
@@ -73,7 +62,6 @@ def generate_image(prompt, image_path, seed=None):
         response = requests.post(url, headers=headers, json=data, timeout=60)
         result = response.json()
         
-        # 调试打印
         print("阿里API返回:", result)
 
         if "output" in result and "results" in result["output"]:
