@@ -9,6 +9,7 @@ import zipfile
 from io import BytesIO
 
 app = Flask(__name__)
+app.secret_key = 'any-random-string-you-like'  # 随便写个字符串，比如 'my-secret-123'
 app.config.from_object(Config)
 CORS(app)
 
@@ -78,6 +79,8 @@ def upload_file():
 
 @app.route('/generate', methods=['POST'])
 def generate():
+    from flask import session
+    session['current_generated_files'] = []
     os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
     # 👇 就在这里插入这两行打印代码
     print("🔍 收到原始请求数据:", request.get_data(as_text=True))
@@ -135,6 +138,7 @@ def generate():
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
                     print(f"图片保存成功: {save_path}")
+                    session['current_generated_files'].append(save_path)
                     generated_images.append({
                         "url": f"/generated_images/{saved_name}",
                         "prompt": final_main_prompt
