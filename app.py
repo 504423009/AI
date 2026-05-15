@@ -57,13 +57,13 @@ def create_image_task(prompt, image_public_url, seed=None):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
+        print("阿里云完整返回:", result)  # 这里会打印所有信息
         task_id = result.get("output", {}).get("task_id")
         print("✅ 创建任务成功 task_id:", task_id)
         return task_id
     except Exception as e:
         print("❌ 创建任务失败:", e)
         return None
-
 # 查询任务结果 带容错
 def get_task_result(task_id):
     if not task_id:
