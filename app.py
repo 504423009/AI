@@ -1,8 +1,6 @@
 import os
 import uuid
-import base64
 import requests
-import time
 from flask import Flask, request, jsonify, send_file, send_from_directory, session, make_response
 from flask_cors import CORS
 from config import Config
@@ -15,153 +13,54 @@ app.secret_key = 'any-random-string-you-like'
 app.config.from_object(Config)
 CORS(app)
 
-# 确保目录存在
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
 
-# 允许的文件类型
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ===================== 配置项 =====================
-VPS_PUBLIC_BASE_URL = "http://187.127.116.116:5000"
-API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
-# ==================================================================
-
-# 创建异步任务 直接传入本地图片路径（不用公网地址）
-def create_image_task(prompt, local_image_path, seed=None):
-    if seed is None:
-        seed = 42
-
-    url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
-
+def generate_image(prompt, image_url, seed=None):
+    """调用 FAL Nano Banana 2 API 生成图片"""
+    # 👇 这里已改成 nano-banana-2
+    url = "https://fal.run/fal-ai/nano-banana-2"
+    
     headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "X-DashScope-Async": "enable"
+        "Authorization": f"Key {app.config['FAL_KEY']}",
+        "Content-Type": "application/json"
     }
 
-    # 直接读取本地图片，转成base64传给阿里云
-    try:
-        with open(local_image_path, "rb") as f:
-            img_bytes = f.read()
-        base64_img = base64.b64encode(img_bytes).decode("utf-8")
-        image_url = f"data:image/jpeg;base64,{base64_img}"
-    except Exception as e:
-        print("❌ 读取本地图片失败:", e)
-        return None
-
-    data = {
-        "model": "wanx-style-repaint-v1",
-        "input": {
-            "image_url": image_url,
-            "prompt": prompt,
-            "style_index": 1
-        },
-        "parameters": {"seed": seed, "n": 1}
+    # 👇 Nano Banana 2 标准参数（兼容原图生图）
+    payload = {
+        "prompt": prompt,
+        "image_url": image_url,
+        "strength": 0.15,       # 保留原图结构强度（最佳值）
+        "resolution": "1K",     # 1K / 2K / 4K
+        "output_format": "png",
+        "negative_prompt": "blurry, low quality, ugly, deformed, watermark, text"
     }
 
+    if seed:
+        payload["seed"] = seed
+
     try:
-        resp = requests.post(url, headers=headers, json=data, timeout=15)
-        result = resp.json()
-        task_id = result.get("output", {}).get("task_id")
-        print("✅ 创建任务成功 task_id:", task_id)
-        return task_id
-    except Exception as e:
-        print("❌ 创建任务失败:", e)
-        return None
-
-# 查询任务结果
-def get_task_result(task_id):
-    if not task_id:
-        return None
-
-    query_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
-
-    for _ in range(15):
-        time.sleep(2)
-        try:
-            res = requests.get(query_url, headers={"Authorization": f"Bearer {API_KEY}"}, timeout=10)
-            task = res.json()
-            status = task.get("output", {}).get("task_status")
-            print(f"任务 {task_id} 状态: {status}")
-
-            if status == "SUCCEEDED":
-                return task["output"]["results"][0]["url"]
-            if status in ["FAILED", "CANCELED"]:
-                print(f"任务 {task_id} 生成失败")
+        response = requests.post(url, headers=headers, json=payload, timeout=90)
+        if response.status_code == 200:
+            data = response.json()
+            if 'images' in data and len(data['images']) > 0:
+                return data['images'][0]['url']
+            elif 'image' in data:
+                return data['image']['url']
+            else:
+                print(f"API 返回格式异常: {data}")
                 return None
-        except Exception as e:
-            print(f"轮询异常 重试中: {e}")
-            continue
-    print(f"任务 {task_id} 超时")
-    return None
-
-@app.route('/generate', methods=['POST'])
-def generate():
-    session['current_generated_files'] = []
-    os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-    
-    data = request.json
-    uploaded_filename = data.get('filename')
-    main_prompt = data.get('main_prompt')
-    variant_prompt = data.get('variant_prompt')
-    platform = data.get('platform', 'amazon')
-    mode = data.get('mode', '6')
-
-    if not uploaded_filename or not main_prompt or not variant_prompt:
-        return jsonify({"error": "Missing parameters"}), 400
-
-    source_image_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
-    total_count = 25 if mode == '25' else 6
-    main_count = 20 if mode == '25' else 1
-
-    suffix = "pure white background, no shadow, high quality, product photography, 8k" if platform == "amazon" else "clean white background, product photography"
-    final_main_prompt = f"{main_prompt}, {suffix}"
-    final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
-
-    task_list = []
-    print("==== 开始批量创建任务 ====")
-    
-    for i in range(main_count):
-        task_id = create_image_task(final_main_prompt, source_image_path)
-        if task_id:
-            task_list.append({"type": "main", "task_id": task_id, "prompt": final_main_prompt})
-
-    for i in range(5):
-        task_id = create_image_task(final_variant_prompt, source_image_path)
-        if task_id:
-            task_list.append({"type": "variant", "task_id": task_id, "prompt": final_variant_prompt})
-
-    generated_images = []
-    print("==== 开始查询结果 ====")
-
-    for item in task_list:
-        img_url = get_task_result(item["task_id"])
-        if not img_url:
-            continue
-
-        try:
-            r = requests.get(img_url, timeout=20)
-            if r.status_code == 200:
-                prefix = item["type"]
-                saved_name = f"{prefix}_{uuid.uuid4().hex}.png"
-                save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
-                
-                with open(save_path, 'wb') as f:
-                    f.write(r.content)
-                
-                session['current_generated_files'].append(save_path)
-                generated_images.append({"url": f"/generated_images/{saved_name}"})
-        except:
-            continue
-
-    if not generated_images:
-        return jsonify({"error": "Failed to generate any images"}), 500
-
-    return jsonify({"images": [img["url"] for img in generated_images]})
+        else:
+            print(f"API 错误 {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print(f"请求异常: {e}")
+        return None
 
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
@@ -176,8 +75,85 @@ def upload_file():
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
-        return jsonify({"filename": unique_filename}) 
+        return jsonify({"filename": unique_filename})
     return jsonify({"error": "File type not allowed"}), 400
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    session['current_generated_files'] = []
+    os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
+
+    data = request.json
+    uploaded_filename = data.get('filename')
+    main_prompt = data.get('main_prompt')
+    variant_prompt = data.get('variant_prompt')
+    platform = data.get('platform', 'amazon')
+    mode = data.get('mode', '6')
+
+    if not uploaded_filename or not main_prompt or not variant_prompt:
+        return jsonify({"error": "Missing parameters"}), 400
+
+    if not uploaded_filename.startswith('http'):
+        source_image_url = f"http://187.127.116.168:5000/uploads/{uploaded_filename}"
+    else:
+        source_image_url = uploaded_filename
+
+    generated_images = []
+    total_count = 25 if mode == '25' else 6
+    main_count = 20 if mode == '25' else 1
+
+    suffix = "pure white background, no shadow, high quality, product photography, 8k" if platform == 'amazon' else "clean light grey background, product photography"
+    final_main_prompt = f"{main_prompt}, {suffix}"
+    final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
+
+    for i in range(main_count):
+        img_url = generate_image(final_main_prompt, source_image_url)
+        if img_url:
+            try:
+                r = requests.get(img_url, timeout=30)
+                if r.status_code == 200:
+                    saved_name = f"main_{i+1}_{uuid.uuid4().hex}.png"
+                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                    with open(save_path, 'wb') as f:
+                        f.write(r.content)
+                    session['current_generated_files'].append(save_path)
+                    generated_images.append({
+                        "url": f"/generated_images/{saved_name}",
+                        "prompt": final_main_prompt
+                    })
+            except Exception as e:
+                print(f"下载图片失败: {e}")
+
+    for i in range(5):
+        img_url = generate_image(final_variant_prompt, source_image_url)
+        if img_url:
+            try:
+                r = requests.get(img_url, timeout=30)
+                if r.status_code == 200:
+                    saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
+                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                    with open(save_path, 'wb') as f:
+                        f.write(r.content)
+                    session['current_generated_files'].append(save_path)
+                    generated_images.append({
+                        "id": saved_name,
+                        "url": f"/generated_images/{saved_name}",
+                        "prompt": final_variant_prompt
+                    })
+            except Exception as e:
+                print(f"Download error: {e}")
+
+    if not generated_images:
+        return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
+
+    safe_images = []
+    for img in generated_images:
+        if isinstance(img, dict) and 'url' in img:
+            safe_images.append(img['url'])
+        elif isinstance(img, str):
+            safe_images.append(img)
+
+    return jsonify({"images": safe_images})
 
 @app.route('/api/download_zip', methods=['POST'])
 def download_zip():
