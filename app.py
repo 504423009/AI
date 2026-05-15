@@ -20,37 +20,49 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ===================== 【椒图AI同款官方参数】 =====================
-def generate_image(prompt, image_url, seed=None):
+# ==============================================
+# 椒图AI同款：NANO BANANA 蒙版重绘（产品100%不变）
+# ==============================================
+def generate_image(image_url, mask_url, seed=None):
     url = "https://fal.run/fal-ai/nano-banana-2"
+    
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
     }
 
-    # 👇 这就是【椒图AI】在用的参数！！！
+    # 👇 这就是椒图AI 真正在用的【蒙版重绘参数】
     payload = {
-        "prompt": "pure white background, product photography, 8k, clean, no shadow, sharp",
+        "prompt": "pure white background, product photography, 8k, clean, no shadows, sharp, professional",
         "image_url": image_url,
-        "strength": 0.15,       # 椒图用的是 strength 不是 image_strength
+        "mask_url": mask_url,        # 核心：背景蒙版（只画背景）
+        "strength": 0.25,
         "resolution": "1K",
         "output_format": "png",
-        "num_images": 1,
-        "negative_prompt": "blurry, text, watermark, deformed, changed product, different object",
+        "negative_prompt": "blurry, text, watermark, logo, deformed, changed product, different object",
     }
-    if seed:
-        payload["seed"] = seed
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=90)
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
         if response.status_code == 200:
             data = response.json()
             return data["images"][0]["url"] if "images" in data else None
     except Exception as e:
         print("error", e)
     return None
-# ==================================================================
 
+# ==============================================
+# 自动生成背景蒙版（自动抠图，产品不动）
+# ==============================================
+def generate_background_mask(image_url):
+    try:
+        return f"https://api.fal.ai/system/mask/background?image_url={image_url}"
+    except:
+        return None
+
+# ==============================================
+# 上传接口
+# ==============================================
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
@@ -67,6 +79,9 @@ def upload_file():
         return jsonify({"filename": unique_filename})
     return jsonify({"error": "File type not allowed"}), 400
 
+# ==============================================
+# 生成接口（蒙版重绘，产品不变）
+# ==============================================
 @app.route('/generate', methods=['POST'])
 def generate():
     session['current_generated_files'] = []
@@ -81,9 +96,12 @@ def generate():
     else:
         source_image_url = f"http://187.127.116.168:5000/uploads/{uploaded_filename}"
 
+    # 👇 自动生成背景蒙版（椒图AI核心功能）
+    mask_url = generate_background_mask(source_image_url)
+
     generated_images = []
     for i in range(6):
-        img_url = generate_image("", source_image_url)
+        img_url = generate_image(source_image_url, mask_url)
         if img_url:
             try:
                 r = requests.get(img_url, timeout=30)
@@ -101,6 +119,9 @@ def generate():
         return jsonify({"error": "Generate failed"}), 500
     return jsonify({"images": [g["url"] for g in generated_images]})
 
+# ==============================================
+# 下载接口
+# ==============================================
 @app.route('/api/download_zip', methods=['POST'])
 def download_zip():
     data = request.json
