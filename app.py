@@ -220,7 +220,7 @@ def home():
 def serve_generated_image(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename)
 
-@app.route('/uploads/<filename')
+@app.route('/uploads/<filename>')
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
