@@ -32,7 +32,8 @@ API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
 # ==================================================================
 
 # 创建异步任务 传入图片公网地址
-def create_image_task(prompt, image_public_url, seed=None):
+# 创建异步任务 直接传入本地图片路径（不用公网地址）
+def create_image_task(prompt, local_image_path, seed=None):
     if seed is None:
         seed = 42
 
@@ -44,10 +45,20 @@ def create_image_task(prompt, image_public_url, seed=None):
         "X-DashScope-Async": "enable"
     }
 
+    # 关键修改：直接读取本地图片，转成base64传给阿里云
+    try:
+        with open(local_image_path, "rb") as f:
+            img_bytes = f.read()
+        base64_img = base64.b64encode(img_bytes).decode("utf-8")
+        image_url = f"data:image/jpeg;base64,{base64_img}"
+    except Exception as e:
+        print("❌ 读取本地图片失败:", e)
+        return None
+
     data = {
         "model": "wanx-style-repaint-v1",
         "input": {
-            "image_url": image_public_url,
+            "image_url": image_url,  # 用base64图片，不用公网地址
             "prompt": prompt,
             "style_index": 1
         },
@@ -57,18 +68,13 @@ def create_image_task(prompt, image_public_url, seed=None):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
-        print("阿里云完整返回:", result)  # 这里会打印所有信息
+        print("阿里云完整返回:", result)
         task_id = result.get("output", {}).get("task_id")
         print("✅ 创建任务成功 task_id:", task_id)
         return task_id
     except Exception as e:
         print("❌ 创建任务失败:", e)
         return None
-# 查询任务结果 带容错
-def get_task_result(task_id):
-    if not task_id:
-        return None
-
     query_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
 
     for _ in range(15):
@@ -121,12 +127,12 @@ def generate():
     print("==== 开始批量创建任务 ====")
     
     for i in range(main_count):
-        task_id = create_image_task(final_main_prompt, source_image_public_url)
+        task_id = create_image_task(final_main_prompt, source_image_path)
         if task_id:
             task_list.append({"type": "main", "task_id": task_id, "prompt": final_main_prompt})
 
     for i in range(5):
-        task_id = create_image_task(final_variant_prompt, source_image_public_url)
+        task_id = create_image_task(final_variant_prompt, source_image_path)
         if task_id:
             task_list.append({"type": "variant", "task_id": task_id, "prompt": final_variant_prompt})
 
