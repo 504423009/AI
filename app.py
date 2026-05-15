@@ -1,7 +1,7 @@
 import os
 import uuid
 import requests
-from flask import Flask, request, jsonify, send_file, send_from_directory, session, make_response
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from config import Config
 from werkzeug.utils import secure_filename
@@ -21,24 +21,25 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# ------------------- 关键修改：适配 Nano Banana 2 API -------------------
 def generate_image(prompt, image_url, seed=None):
-    """调用 FAL Nano Banana 2 API 生成图片"""
-    # 👇 这里已改成 nano-banana-2
+    """调用 Fal.ai Nano Banana 2 API 以图生图"""
     url = "https://fal.run/fal-ai/nano-banana-2"
-    
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
     }
 
-    # 👇 Nano Banana 2 标准参数（兼容原图生图）
+    # 适配 Nano Banana 2 的标准参数（以图生图必须的配置）
     payload = {
         "prompt": prompt,
-        "image_url": image_url,
-        "strength": 0.15,       # 保留原图结构强度（最佳值）
-        "resolution": "1K",     # 1K / 2K / 4K
+        "image_url": image_url,  # 以图生图的原图URL
+        "image_strength": 0.15,  # 原图保留强度，值越低越像原图，推荐0.1-0.3（关键！之前用错了参数名）
+        "resolution": "1K",      # 分辨率，产品图用1K足够，2K/4K更清晰但更贵
         "output_format": "png",
-        "negative_prompt": "blurry, low quality, ugly, deformed, watermark, text"
+        "num_images": 1,         # 每次生成1张图，避免额外消耗
+        "safety_tolerance": 4,   # 放宽安全检查，避免产品图被误判
+        "negative_prompt": "blurry, low quality, ugly, deformed, watermark, text, bad anatomy, disfigured"
     }
 
     if seed:
@@ -46,6 +47,9 @@ def generate_image(prompt, image_url, seed=None):
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=90)
+        print(f"API响应状态码: {response.status_code}")
+        print(f"API响应内容: {response.text}")  # 打印完整响应，方便排查问题
+        
         if response.status_code == 200:
             data = response.json()
             if 'images' in data and len(data['images']) > 0:
@@ -53,14 +57,15 @@ def generate_image(prompt, image_url, seed=None):
             elif 'image' in data:
                 return data['image']['url']
             else:
-                print(f"API 返回格式异常: {data}")
+                print(f"API返回格式异常: {data}")
                 return None
         else:
-            print(f"API 错误 {response.status_code}: {response.text}")
+            print(f"API错误 {response.status_code}: {response.text}")
             return None
     except Exception as e:
         print(f"请求异常: {e}")
         return None
+# -------------------------------------------------------------------
 
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
@@ -80,9 +85,12 @@ def upload_file():
 
 @app.route('/generate', methods=['POST'])
 def generate():
+    from flask import session
     session['current_generated_files'] = []
     os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-
+    print("🔍 收到原始请求数据:", request.get_data(as_text=True))
+    print("🔍 解析后的 JSON:", request.json)
+    
     data = request.json
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
@@ -110,12 +118,16 @@ def generate():
         img_url = generate_image(final_main_prompt, source_image_url)
         if img_url:
             try:
+                print(f"开始下载图片: {img_url}")
                 r = requests.get(img_url, timeout=30)
+                print(f"下载状态码: {r.status_code}")
                 if r.status_code == 200:
                     saved_name = f"main_{i+1}_{uuid.uuid4().hex}.png"
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
+                    print(f"保存路径: {save_path}")
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
+                    print(f"图片保存成功: {save_path}")
                     session['current_generated_files'].append(save_path)
                     generated_images.append({
                         "url": f"/generated_images/{saved_name}",
@@ -123,6 +135,8 @@ def generate():
                     })
             except Exception as e:
                 print(f"下载图片失败: {e}")
+                import traceback
+                traceback.print_exc()
 
     for i in range(5):
         img_url = generate_image(final_variant_prompt, source_image_url)
@@ -134,7 +148,9 @@ def generate():
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
+                    print(f"图片保存成功: {save_path}")
                     session['current_generated_files'].append(save_path)
+                    
                     generated_images.append({
                         "id": saved_name,
                         "url": f"/generated_images/{saved_name}",
@@ -142,6 +158,8 @@ def generate():
                     })
             except Exception as e:
                 print(f"Download error: {e}")
+                import traceback
+                traceback.print_exc()
 
     if not generated_images:
         return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
@@ -153,6 +171,7 @@ def generate():
         elif isinstance(img, str):
             safe_images.append(img)
 
+    print("### 最终返回给前端的链接：", safe_images)
     return jsonify({"images": safe_images})
 
 @app.route('/api/download_zip', methods=['POST'])
@@ -200,6 +219,11 @@ def serve_uploaded_image(filename):
 
 @app.route('/zip', methods=['GET'])
 def download_zip_legacy():
+    import os
+    import zipfile
+    from io import BytesIO
+    from flask import make_response, send_file, session
+
     session_images = session.get('current_generated_files', [])
     if not session_images:
         return "本次会话未生成任何图片，无法打包下载", 200
@@ -212,6 +236,7 @@ def download_zip_legacy():
                 zipf.write(img_path, filename)
 
     memory_file.seek(0)
+
     response = make_response(
         send_file(
             memory_file,
