@@ -30,7 +30,7 @@ VPS_PUBLIC_BASE_URL = "http://187.127.116.116:5000"
 API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
 # ==================================================================
 
-# 创建异步任务 直接传入本地图片路径（不用公网地址）
+# 创建异步任务 直接传入本地图片路径（带错误日志）
 def create_image_task(prompt, local_image_path, seed=None):
     if seed is None:
         seed = 42
@@ -54,11 +54,11 @@ def create_image_task(prompt, local_image_path, seed=None):
         return None
 
     data = {
-        "model": "wanx-background-generation-v2",  # 换背景专用模型
+        "model": "wanx-background-generation-v2",
         "input": {
             "image_url": image_url,
             "prompt": prompt,
-            "ref_strength": 0.6,  # 控制变化强度：0.2小变化 → 0.8大变化
+            "ref_strength": 0.6,
             "mode": "preview"
         },
         "parameters": {"seed": seed, "n": 1}
@@ -67,11 +67,13 @@ def create_image_task(prompt, local_image_path, seed=None):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
+        # 打印阿里云完整返回，方便看错误
+        print("阿里云完整返回:", result)
         task_id = result.get("output", {}).get("task_id")
         print("✅ 创建任务成功 task_id:", task_id)
         return task_id
     except Exception as e:
-        print("❌ 创建任务失败:", e)
+        print("❌ 请求阿里云失败:", e)
         return None
 
 # 查询任务结果
