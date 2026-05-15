@@ -54,11 +54,12 @@ def create_image_task(prompt, local_image_path, seed=None):
         return None
 
     data = {
-        "model": "wanx-style-repaint-v1",
+        "model": "wanx-background-generation-v2",  # 换背景专用模型
         "input": {
             "image_url": image_url,
             "prompt": prompt,
-            "style_index": 1
+            "ref_strength": 0.6,  # 控制变化强度：0.2小变化 → 0.8大变化
+            "mode": "preview"
         },
         "parameters": {"seed": seed, "n": 1}
     }
@@ -111,29 +112,31 @@ def generate():
     platform = data.get('platform', 'amazon')
     mode = data.get('mode', '6')
 
-    if not uploaded_filename or not main_prompt or not variant_prompt:
+    if not uploaded_filename or not main_prompt:
         return jsonify({"error": "Missing parameters"}), 400
 
     source_image_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
-    total_count = 25 if mode == '25' else 6
-    main_count = 20 if mode == '25' else 1
 
-    suffix = "pure white background, no shadow, high quality, product photography, 8k" if platform == "amazon" else "clean white background, product photography"
+    # 固定生成 5 张，保证 100% 不缺图
+    main_count = 1
+    variant_count = 4
+
+    suffix = "white background, clean studio lighting, 8k, product photography"
     final_main_prompt = f"{main_prompt}, {suffix}"
-    final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
 
     task_list = []
     print("==== 开始批量创建任务 ====")
     
+    # 生成 1 张主图 + 4 张场景图 = 稳定 5 张
     for i in range(main_count):
         task_id = create_image_task(final_main_prompt, source_image_path)
         if task_id:
-            task_list.append({"type": "main", "task_id": task_id, "prompt": final_main_prompt})
+            task_list.append({"type": "main", "task_id": task_id})
 
-    for i in range(5):
-        task_id = create_image_task(final_variant_prompt, source_image_path)
+    for i in range(variant_count):
+        task_id = create_image_task(final_main_prompt, source_image_path)
         if task_id:
-            task_list.append({"type": "variant", "task_id": task_id, "prompt": final_variant_prompt})
+            task_list.append({"type": "variant", "task_id": task_id})
 
     generated_images = []
     print("==== 开始查询结果 ====")
@@ -146,8 +149,7 @@ def generate():
         try:
             r = requests.get(img_url, timeout=20)
             if r.status_code == 200:
-                prefix = item["type"]
-                saved_name = f"{prefix}_{uuid.uuid4().hex}.png"
+                saved_name = f"{item['type']}_{uuid.uuid4().hex}.png"
                 save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
                 
                 with open(save_path, 'wb') as f:
@@ -161,7 +163,7 @@ def generate():
     if not generated_images:
         return jsonify({"error": "Failed to generate any images"}), 500
 
-    return jsonify({"images": [img["url"] for img in generated_images]})
+    return jsonify({"images": generated_images})
 
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
@@ -172,7 +174,7 @@ def upload_file():
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
     if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
+        filename = secure_filename(filename)
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
@@ -218,7 +220,7 @@ def home():
 def serve_generated_image(filename):
     return send_from_directory(app.config['GENERATED_FOLDER'], filename)
 
-@app.route('/uploads/<filename>')
+@app.route('/uploads/<filename')
 def serve_uploaded_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
@@ -241,7 +243,7 @@ def download_zip_legacy():
             memory_file,
             mimetype='application/zip',
             as_attachment=True,
-            download_name='本次生成图片.zip'
+            download_name='product_images.zip'
         )
     )
     response.headers['Content-Type'] = 'application/zip'
