@@ -25,13 +25,11 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ===================== 配置项 已帮你改好IP =====================
-# 填你的VPS公网IP或域名 例如：http://123.123.123.123:5000
+# ===================== 配置项 =====================
 VPS_PUBLIC_BASE_URL = "http://187.127.116.116:5000"
 API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
 # ==================================================================
 
-# 创建异步任务 传入图片公网地址
 # 创建异步任务 直接传入本地图片路径（不用公网地址）
 def create_image_task(prompt, local_image_path, seed=None):
     if seed is None:
@@ -45,7 +43,7 @@ def create_image_task(prompt, local_image_path, seed=None):
         "X-DashScope-Async": "enable"
     }
 
-    # 关键修改：直接读取本地图片，转成base64传给阿里云
+    # 直接读取本地图片，转成base64传给阿里云
     try:
         with open(local_image_path, "rb") as f:
             img_bytes = f.read()
@@ -58,7 +56,7 @@ def create_image_task(prompt, local_image_path, seed=None):
     data = {
         "model": "wanx-style-repaint-v1",
         "input": {
-            "image_url": image_url,  # 用base64图片，不用公网地址
+            "image_url": image_url,
             "prompt": prompt,
             "style_index": 1
         },
@@ -68,13 +66,18 @@ def create_image_task(prompt, local_image_path, seed=None):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
-        print("阿里云完整返回:", result)
         task_id = result.get("output", {}).get("task_id")
         print("✅ 创建任务成功 task_id:", task_id)
         return task_id
     except Exception as e:
         print("❌ 创建任务失败:", e)
         return None
+
+# 查询任务结果
+def get_task_result(task_id):
+    if not task_id:
+        return None
+
     query_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
 
     for _ in range(15):
@@ -115,13 +118,9 @@ def generate():
     total_count = 25 if mode == '25' else 6
     main_count = 20 if mode == '25' else 1
 
-    suffix = "pure white background, no shadow, high quality, product photography, 8k" if platform == 'amazon' else "clean light grey background, product photography"
+    suffix = "pure white background, no shadow, high quality, product photography, 8k" if platform == "amazon" else "clean white background, product photography"
     final_main_prompt = f"{main_prompt}, {suffix}"
     final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
-
-    # 拼接你VPS的公网图片地址
-    source_image_public_url = f"{VPS_PUBLIC_BASE_URL}/uploads/{uploaded_filename}"
-    print("使用原图公网地址:", source_image_public_url)
 
     task_list = []
     print("==== 开始批量创建任务 ====")
