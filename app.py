@@ -30,7 +30,7 @@ VPS_PUBLIC_BASE_URL = "http://187.127.116.116:5000"
 API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
 # ==================================================================
 
-# 创建异步任务（修复了style参数）
+# 创建异步任务
 def create_image_task(prompt, local_image_path, seed=None):
     if seed is None:
         seed = 42
@@ -43,7 +43,6 @@ def create_image_task(prompt, local_image_path, seed=None):
         "X-DashScope-Async": "enable"
     }
 
-    # 直接读取本地图片，转成base64传给阿里云
     try:
         with open(local_image_path, "rb") as f:
             img_bytes = f.read()
@@ -58,7 +57,7 @@ def create_image_task(prompt, local_image_path, seed=None):
         "input": {
             "image_url": image_url,
             "prompt": prompt,
-            "style_index": 1  # 用正确的参数，1=通用风格，变化明显
+            "style_index": 1
         },
         "parameters": {"seed": seed, "n": 1}
     }
@@ -66,9 +65,7 @@ def create_image_task(prompt, local_image_path, seed=None):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
-        print("阿里云完整返回:", result)
         task_id = result.get("output", {}).get("task_id")
-        print("✅ 创建任务成功 task_id:", task_id)
         return task_id
     except Exception as e:
         print("❌ 请求阿里云失败:", e)
@@ -87,17 +84,13 @@ def get_task_result(task_id):
             res = requests.get(query_url, headers={"Authorization": f"Bearer {API_KEY}"}, timeout=10)
             task = res.json()
             status = task.get("output", {}).get("task_status")
-            print(f"任务 {task_id} 状态: {status}")
 
             if status == "SUCCEEDED":
                 return task["output"]["results"][0]["url"]
             if status in ["FAILED", "CANCELED"]:
-                print(f"任务 {task_id} 生成失败")
                 return None
         except Exception as e:
-            print(f"轮询异常 重试中: {e}")
             continue
-    print(f"任务 {task_id} 超时")
     return None
 
 @app.route('/generate', methods=['POST'])
@@ -108,25 +101,21 @@ def generate():
     data = request.json
     uploaded_filename = data.get('filename')
     main_prompt = data.get('main_prompt')
-    variant_prompt = data.get('variant_prompt')
-    platform = data.get('platform', 'amazon')
-    mode = data.get('mode', '6')
 
     if not uploaded_filename or not main_prompt:
         return jsonify({"error": "Missing parameters"}), 400
 
     source_image_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
 
-    # 固定生成 5 张，保证100%不缺图
+    # 固定生成 5 张
     main_count = 1
     variant_count = 4
 
-    suffix = "on clean white background, professional studio lighting, 8k high resolution, realistic product photography"
+    suffix = "white background, professional studio lighting, 8k, product photography"
     final_main_prompt = f"{main_prompt}, {suffix}"
 
     task_list = []
-    print("==== 开始批量创建任务 ====")
-    
+
     for i in range(main_count):
         task_id = create_image_task(final_main_prompt, source_image_path)
         if task_id:
@@ -138,7 +127,6 @@ def generate():
             task_list.append({"type": "variant", "task_id": task_id})
 
     generated_images = []
-    print("==== 开始查询结果 ====")
 
     for item in task_list:
         img_url = get_task_result(item["task_id"])
@@ -155,7 +143,10 @@ def generate():
                     f.write(r.content)
                 
                 session['current_generated_files'].append(save_path)
-                generated_images.append({"url": f"/generated_images/{saved_name}"})
+                
+                # ✅ 关键修复：返回 完整公网 URL，前端才能显示！
+                full_url = f"{VPS_PUBLIC_BASE_URL}/generated_images/{saved_name}"
+                generated_images.append({"url": full_url})
         except:
             continue
 
@@ -200,7 +191,6 @@ def download_zip():
                         filename = f"{img_id}.png"
                         zf.writestr(filename, r.content)
             except Exception as e:
-                print(f"Error adding image to zip: {e}")
                 continue
 
     memory_file.seek(0)
@@ -242,7 +232,7 @@ def download_zip_legacy():
             memory_file,
             mimetype='application/zip',
             as_attachment=True,
-            download_name='本次生成图片.zip'
+            download_name='product_images.zip'
         )
     )
     response.headers['Content-Type'] = 'application/zip'
