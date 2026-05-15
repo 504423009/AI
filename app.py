@@ -5,9 +5,9 @@ from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from config import Config
 from werkzeug.utils import secure_filename
-import zipfile
 from io import BytesIO
 from PIL import Image
+from rembg import remove, new_session
 import traceback
 
 app = Flask(__name__)
@@ -20,40 +20,31 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 
+# 初始化本地抠图模型（一次加载，后续直接用）
+bg_remove_session = new_session("u2netp")
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --------------------------
-# 步骤1：调用 remove.bg 抠图（透明背景产品）
+# 步骤1：本地抠图（无需API，无次数限制）
 # --------------------------
-def remove_bg_api(image_path):
+def remove_bg_local(image_path):
     try:
-        url = "https://api.remove.bg/v1.0/removebg"
-        files = {
-            'image_file': open(image_path, 'rb'),
-        }
-        data = {
-            'size': '1024x1024'
-        }
-        headers = {
-            # 👉 这里替换成你自己的 remove.bg API Key！
-            'X-Api-Key': '9mbvyw8YqCpRM1JZVNYHupq4'
-        }
-        response = requests.post(url, files=files, data=data, headers=headers, timeout=30)
-        if response.status_code == 200:
-            out_path = os.path.join(
-                app.config['UPLOAD_FOLDER'],
-                f"{uuid.uuid4().hex}_transparent.png"
-            )
-            with open(out_path, 'wb') as f:
-                f.write(response.content)
-            print(f"✅ 抠图成功：{out_path}")
-            return out_path
-        else:
-            print(f"❌ 抠图失败，状态码：{response.status_code}，响应：{response.text}")
-            return None
+        # 打开图片
+        image = Image.open(image_path).convert("RGBA")
+        # 本地抠图
+        output = remove(image, session=bg_remove_session)
+        # 保存透明背景产品
+        out_path = os.path.join(
+            app.config['UPLOAD_FOLDER'],
+            f"{uuid.uuid4().hex}_transparent.png"
+        )
+        output.save(out_path)
+        print(f"✅ 本地抠图成功：{out_path}")
+        return out_path
     except Exception as e:
-        print(f"❌ 抠图异常：{e}")
+        print(f"❌ 本地抠图失败：{e}")
         traceback.print_exc()
         return None
 
@@ -165,10 +156,10 @@ def generate():
 
         print(f"📌 开始处理文件：{file_path}")
 
-        # 1. 抠图
-        product_transparent = remove_bg_api(file_path)
+        # 1. 本地抠图（无API依赖）
+        product_transparent = remove_bg_local(file_path)
         if not product_transparent:
-            return jsonify({"error": "抠图失败，请检查remove.bg API Key"}), 500
+            return jsonify({"error": "本地抠图失败"}), 500
 
         final_images = []
         for i in range(6):
