@@ -30,7 +30,7 @@ VPS_PUBLIC_BASE_URL = "http://187.127.116.116:5000"
 API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
 # ==================================================================
 
-# 创建异步任务 直接传入本地图片路径（带错误日志）
+# 创建异步任务（修复了style参数）
 def create_image_task(prompt, local_image_path, seed=None):
     if seed is None:
         seed = 42
@@ -54,11 +54,11 @@ def create_image_task(prompt, local_image_path, seed=None):
         return None
 
     data = {
-        "model": "wanx-style-repaint-v1",  # 换回支持base64的模型
+        "model": "wanx-style-repaint-v1",
         "input": {
             "image_url": image_url,
             "prompt": prompt,
-            "style": "photography"  # 增加摄影风格，让变化更明显
+            "style_index": 1  # 用正确的参数，1=通用风格，变化明显
         },
         "parameters": {"seed": seed, "n": 1}
     }
@@ -66,7 +66,6 @@ def create_image_task(prompt, local_image_path, seed=None):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
-        # 打印阿里云完整返回，方便看错误
         print("阿里云完整返回:", result)
         task_id = result.get("output", {}).get("task_id")
         print("✅ 创建任务成功 task_id:", task_id)
@@ -118,18 +117,16 @@ def generate():
 
     source_image_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
 
-    # 固定生成 5 张，保证 100% 不缺图
+    # 固定生成 5 张，保证100%不缺图
     main_count = 1
     variant_count = 4
 
-    # 增强提示词，让生成的图片变化更明显
-    suffix = "on a clean white background, professional studio lighting, 8k high resolution, e-commerce product photography, realistic texture"
+    suffix = "on clean white background, professional studio lighting, 8k high resolution, realistic product photography"
     final_main_prompt = f"{main_prompt}, {suffix}"
 
     task_list = []
     print("==== 开始批量创建任务 ====")
     
-    # 生成 1 张主图 + 4 张场景图 = 稳定 5 张
     for i in range(main_count):
         task_id = create_image_task(final_main_prompt, source_image_path)
         if task_id:
