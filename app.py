@@ -21,25 +21,39 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ------------------- 关键修改：适配 Nano Banana 2 API -------------------
+# ------------------- 关键修复：适配 Nano Banana 2 以图生图 -------------------
+def clean_prompt(prompt):
+    """清理提示词，去掉中文指令，只保留模型能理解的英文描述"""
+    # 移除所有中文指令，只保留后面的英文部分
+    if "帮我生成" in prompt or "分析产品" in prompt:
+        # 提取逗号后面的描述部分
+        parts = prompt.split(',')
+        cleaned = [p for p in parts if not any(c in p for c in ["帮我生成", "分析产品"])]
+        return ','.join(cleaned).strip()
+    return prompt
+
 def generate_image(prompt, image_url, seed=None):
-    """调用 Fal.ai Nano Banana 2 API 以图生图"""
+    """调用 Fal.ai Nano Banana 2 API 以图生图（修复版）"""
     url = "https://fal.run/fal-ai/nano-banana-2"
     headers = {
         "Authorization": f"Key {app.config['FAL_KEY']}",
         "Content-Type": "application/json"
     }
 
-    # 适配 Nano Banana 2 的标准参数（以图生图必须的配置）
+    # 1. 先清理提示词，去掉中文指令
+    cleaned_prompt = clean_prompt(prompt)
+    print(f"清理后的提示词: {cleaned_prompt}")
+
+    # 2. 严格按照 Nano Banana 2 官方文档配置以图生图参数
     payload = {
-        "prompt": prompt,
-        "image_url": image_url,  # 以图生图的原图URL
-        "image_strength": 0.15,  # 原图保留强度，值越低越像原图，推荐0.1-0.3（关键！之前用错了参数名）
-        "resolution": "1K",      # 分辨率，产品图用1K足够，2K/4K更清晰但更贵
+        "prompt": cleaned_prompt,
+        "image_url": image_url,
+        "image_strength": 0.12,  # 产品图专用值，极低强度，保证原图产品不被改
+        "resolution": "1K",
         "output_format": "png",
-        "num_images": 1,         # 每次生成1张图，避免额外消耗
-        "safety_tolerance": 4,   # 放宽安全检查，避免产品图被误判
-        "negative_prompt": "blurry, low quality, ugly, deformed, watermark, text, bad anatomy, disfigured"
+        "num_images": 1,
+        "safety_tolerance": 4,
+        "negative_prompt": "blurry, low quality, ugly, deformed, watermark, text, bad anatomy, disfigured, extra limbs, cropped"
     }
 
     if seed:
@@ -48,16 +62,14 @@ def generate_image(prompt, image_url, seed=None):
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=90)
         print(f"API响应状态码: {response.status_code}")
-        print(f"API响应内容: {response.text}")  # 打印完整响应，方便排查问题
+        print(f"API响应内容: {response.text[:500]}...")  # 打印部分响应，方便排查
         
         if response.status_code == 200:
             data = response.json()
             if 'images' in data and len(data['images']) > 0:
                 return data['images'][0]['url']
-            elif 'image' in data:
-                return data['image']['url']
             else:
-                print(f"API返回格式异常: {data}")
+                print(f"API返回无图片: {data}")
                 return None
         else:
             print(f"API错误 {response.status_code}: {response.text}")
@@ -110,45 +122,49 @@ def generate():
     total_count = 25 if mode == '25' else 6
     main_count = 20 if mode == '25' else 1
 
-    suffix = "pure white background, no shadow, high quality, product photography, 8k" if platform == 'amazon' else "clean light grey background, product photography"
+    # 固定英文后缀，确保模型理解电商产品图需求
+    if platform == 'amazon':
+        suffix = "pure white background, no shadow, clean product photography, high detail, 8k"
+    else:
+        suffix = "clean light grey background, product photography, high quality"
+    
+    # 主图提示词：去掉中文指令，只保留产品描述+电商背景要求
     final_main_prompt = f"{main_prompt}, {suffix}"
-    final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
+    # 变体图提示词：去掉中文指令，只保留产品描述+高质量要求
+    final_variant_prompt = f"{variant_prompt}, high quality, photorealistic product photography"
 
     for i in range(main_count):
         img_url = generate_image(final_main_prompt, source_image_url)
         if img_url:
             try:
-                print(f"开始下载图片: {img_url}")
+                print(f"开始下载主图: {img_url}")
                 r = requests.get(img_url, timeout=30)
-                print(f"下载状态码: {r.status_code}")
                 if r.status_code == 200:
                     saved_name = f"main_{i+1}_{uuid.uuid4().hex}.png"
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
-                    print(f"保存路径: {save_path}")
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
-                    print(f"图片保存成功: {save_path}")
+                    print(f"主图保存成功: {save_path}")
                     session['current_generated_files'].append(save_path)
                     generated_images.append({
                         "url": f"/generated_images/{saved_name}",
                         "prompt": final_main_prompt
                     })
             except Exception as e:
-                print(f"下载图片失败: {e}")
-                import traceback
-                traceback.print_exc()
+                print(f"下载主图失败: {e}")
 
     for i in range(5):
         img_url = generate_image(final_variant_prompt, source_image_url)
         if img_url:
             try:
+                print(f"开始下载变体图: {img_url}")
                 r = requests.get(img_url, timeout=30)
                 if r.status_code == 200:
                     saved_name = f"variant_{i+1}_{uuid.uuid4().hex}.png"
                     save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
                     with open(save_path, 'wb') as f:
                         f.write(r.content)
-                    print(f"图片保存成功: {save_path}")
+                    print(f"变体图保存成功: {save_path}")
                     session['current_generated_files'].append(save_path)
                     
                     generated_images.append({
@@ -157,9 +173,7 @@ def generate():
                         "prompt": final_variant_prompt
                     })
             except Exception as e:
-                print(f"Download error: {e}")
-                import traceback
-                traceback.print_exc()
+                print(f"下载变体图失败: {e}")
 
     if not generated_images:
         return jsonify({"error": "Failed to generate any images. Check API Key or Source Image URL."}), 500
