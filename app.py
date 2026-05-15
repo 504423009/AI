@@ -174,7 +174,7 @@ def upload_file():
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
     if file and allowed_file(file.filename):
-        filename = secure_filename(filename)
+        filename = secure_filename(file.filename)
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
@@ -243,7 +243,7 @@ def download_zip_legacy():
             memory_file,
             mimetype='application/zip',
             as_attachment=True,
-            download_name='product_images.zip'
+            download_name='本次生成图片.zip'
         )
     )
     response.headers['Content-Type'] = 'application/zip'
