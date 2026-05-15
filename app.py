@@ -25,8 +25,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ===================== 配置项 =====================
-VPS_PUBLIC_BASE_URL = "http://187.127.116.116:5000"
+# ===================== 配置项（已修正为你的真实IP）=====================
+VPS_PUBLIC_BASE_URL = "http://187.127.116.168:5000"
 API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
 # ==================================================================
 
@@ -144,7 +144,7 @@ def generate():
                 
                 session['current_generated_files'].append(save_path)
                 
-                # ✅ 关键修复：返回 完整公网 URL，前端才能显示！
+                # ✅ 关键修复：返回完整公网URL，前端才能显示
                 full_url = f"{VPS_PUBLIC_BASE_URL}/generated_images/{saved_name}"
                 generated_images.append({"url": full_url})
         except:
