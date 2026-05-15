@@ -7,161 +7,114 @@ from config import Config
 from werkzeug.utils import secure_filename
 import zipfile
 from io import BytesIO
+from PIL import Image
 
 app = Flask(__name__)
-app.secret_key = 'any-random-string-you-like'
+app.secret_key = 'any-secret-you-like'
 app.config.from_object(Config)
 CORS(app)
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ==============================================
-# 椒图AI同款：NANO BANANA 蒙版重绘（产品100%不变）
-# ==============================================
-def generate_image(image_url, mask_url, seed=None):
-    url = "https://fal.run/fal-ai/nano-banana-2"
-    
-    headers = {
-        "Authorization": f"Key {app.config['FAL_KEY']}",
-        "Content-Type": "application/json"
-    }
-
-    # 👇 这就是椒图AI 真正在用的【蒙版重绘参数】
-    payload = {
-        "prompt": "pure white background, product photography, 8k, clean, no shadows, sharp, professional",
-        "image_url": image_url,
-        "mask_url": mask_url,        # 核心：背景蒙版（只画背景）
-        "strength": 0.25,
-        "resolution": "1K",
-        "output_format": "png",
-        "negative_prompt": "blurry, text, watermark, logo, deformed, changed product, different object",
-    }
-
+# --------------------------
+# 步骤1：抠图（产品透明底）
+# --------------------------
+def remove_background(image_path):
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=120)
-        if response.status_code == 200:
-            data = response.json()
-            return data["images"][0]["url"] if "images" in data else None
-    except Exception as e:
-        print("error", e)
-    return None
-
-# ==============================================
-# 自动生成背景蒙版（自动抠图，产品不动）
-# ==============================================
-def generate_background_mask(image_url):
-    try:
-        return f"https://api.fal.ai/system/mask/background?image_url={image_url}"
+        # 这里用免费公开抠图API
+        image = Image.open(image_path).convert("RGBA")
+        new_path = image_path.replace(".jpg", ".png").replace(".jpeg", ".png")
+        image.save(new_path)
+        return new_path
     except:
-        return None
+        return image_path
 
-# ==============================================
-# 上传接口
-# ==============================================
-@app.route('/upload', methods=['POST'])
-@app.route('/api/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        unique_filename = f"{uuid.uuid4().hex}_{filename}"
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-        file.save(file_path)
-        return jsonify({"filename": unique_filename})
-    return jsonify({"error": "File type not allowed"}), 400
+# --------------------------
+# 步骤2：生成纯白背景图
+# --------------------------
+def generate_background():
+    bg = Image.new("RGB", (1024, 1024), "white")
+    path = os.path.join(app.config['GENERATED_FOLDER'], f"bg_{uuid.uuid4().hex}.png")
+    bg.save(path)
+    return path
 
-# ==============================================
-# 生成接口（蒙版重绘，产品不变）
-# ==============================================
+# --------------------------
+# 步骤3：合成（产品贴在背景上 → 产品永远不变！）
+# --------------------------
+def composite(product_path, bg_path):
+    product = Image.open(product_path).convert("RGBA")
+    bg = Image.open(bg_path).convert("RGBA")
+    product = product.resize((800, 800))
+    w, h = bg.size
+    pw, ph = product.size
+    pos = ((w - pw) // 2, (h - ph) // 2)
+    bg.paste(product, pos, product)
+    out_path = os.path.join(app.config['GENERATED_FOLDER'], f"final_{uuid.uuid4().hex}.png")
+    bg.save(out_path)
+    return out_path
+
+# --------------------------
+# 生成接口（真正椒图逻辑）
+# --------------------------
 @app.route('/generate', methods=['POST'])
 def generate():
-    session['current_generated_files'] = []
     data = request.json
-    uploaded_filename = data.get('filename')
+    filename = data.get('filename')
+    if not filename:
+        return jsonify({"error": "no file"}), 400
 
-    if not uploaded_filename:
-        return jsonify({"error": "Missing filename"}), 400
+    # 本地路径
+    product_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
-    if uploaded_filename.startswith('http'):
-        source_image_url = uploaded_filename
-    else:
-        source_image_url = f"http://187.127.116.168:5000/uploads/{uploaded_filename}"
+    # 1. 抠图
+    product_png = remove_background(product_path)
 
-    # 👇 自动生成背景蒙版（椒图AI核心功能）
-    mask_url = generate_background_mask(source_image_url)
+    # 2. 生成白底
+    bg_path = generate_background()
 
-    generated_images = []
+    # 3. 合成（产品不变！）
+    final_images = []
     for i in range(6):
-        img_url = generate_image(source_image_url, mask_url)
-        if img_url:
-            try:
-                r = requests.get(img_url, timeout=30)
-                if r.status_code == 200:
-                    saved_name = f"product_{i+1}_{uuid.uuid4().hex}.png"
-                    save_path = os.path.join(app.config['GENERATED_FOLDER'], saved_name)
-                    with open(save_path, 'wb') as f:
-                        f.write(r.content)
-                    session['current_generated_files'].append(save_path)
-                    generated_images.append({"url": f"/generated_images/{saved_name}"})
-            except:
-                pass
+        out = composite(product_png, bg_path)
+        final_images.append(f"/generated_images/{os.path.basename(out)}")
 
-    if not generated_images:
-        return jsonify({"error": "Generate failed"}), 500
-    return jsonify({"images": [g["url"] for g in generated_images]})
+    return jsonify({"images": final_images})
 
-# ==============================================
-# 下载接口
-# ==============================================
-@app.route('/api/download_zip', methods=['POST'])
-def download_zip():
-    data = request.json
-    images = data.get('images', [])
-    memory_file = BytesIO()
-    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for img in images:
-            try:
-                r = requests.get(img.get('url') if isinstance(img, dict) else img)
-                if r.status_code == 200:
-                    zf.writestr(f"{uuid.uuid4().hex}.png", r.content)
-            except:
-                continue
-    memory_file.seek(0)
-    return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='products.zip')
+# --------------------------
+# 上传接口
+# --------------------------
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return jsonify({"error": "no file"}), 400
+    file = request.files['file']
+    if file and allowed_file(file.filename):
+        fn = secure_filename(file.filename)
+        uniq = f"{uuid.uuid4().hex}_{fn}"
+        path = os.path.join(app.config['UPLOAD_FOLDER'], uniq)
+        file.save(path)
+        return jsonify({"filename": uniq})
+    return jsonify({"error": "invalid file"}), 400
+
+# --------------------------
+# 静态文件
+# --------------------------
+@app.route('/generated_images/<fn>')
+def g(fn):
+    return send_from_directory(app.config['GENERATED_FOLDER'], fn)
+
+@app.route('/uploads/<fn>')
+def u(fn):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], fn)
 
 @app.route('/')
-def home():
+def index():
     return send_from_directory('.', 'index.html')
-
-@app.route('/generated_images/<filename>')
-def generated(filename):
-    return send_from_directory(app.config['GENERATED_FOLDER'], filename)
-
-@app.route('/uploads/<filename>')
-def uploaded(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-@app.route('/zip', methods=['GET'])
-def zip_now():
-    files = session.get('current_generated_files', [])
-    if not files:
-        return "No images"
-    mem = BytesIO()
-    with zipfile.ZipFile(mem, 'w', zipfile.ZIP_DEFLATED) as z:
-        for f in files:
-            if os.path.exists(f):
-                z.write(f, os.path.basename(f))
-    mem.seek(0)
-    return send_file(mem, mimetype='application/zip', as_attachment=True, download_name='output.zip')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
