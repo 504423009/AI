@@ -54,12 +54,11 @@ def create_image_task(prompt, local_image_path, seed=None):
         return None
 
     data = {
-        "model": "wanx-background-generation-v2",
+        "model": "wanx-style-repaint-v1",  # 换回支持base64的模型
         "input": {
             "image_url": image_url,
             "prompt": prompt,
-            "ref_strength": 0.6,
-            "mode": "preview"
+            "style": "photography"  # 增加摄影风格，让变化更明显
         },
         "parameters": {"seed": seed, "n": 1}
     }
@@ -123,7 +122,8 @@ def generate():
     main_count = 1
     variant_count = 4
 
-    suffix = "white background, clean studio lighting, 8k, product photography"
+    # 增强提示词，让生成的图片变化更明显
+    suffix = "on a clean white background, professional studio lighting, 8k high resolution, e-commerce product photography, realistic texture"
     final_main_prompt = f"{main_prompt}, {suffix}"
 
     task_list = []
