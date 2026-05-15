@@ -15,23 +15,27 @@ app.secret_key = 'any-random-string-you-like'
 app.config.from_object(Config)
 CORS(app)
 
+# 确保目录存在
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
 
+# 允许的文件类型
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ==============================================================================
-# 稳定版：创建任务（只发任务，不等待）
-# ==============================================================================
-def create_image_task(prompt, seed=None):
+# ===================== 配置项 已帮你改好IP =====================
+# 填你的VPS公网IP或域名 例如：http://123.123.123.123:5000
+VPS_PUBLIC_BASE_URL = "http://187.127.116.116:5000"
+API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
+# ==================================================================
+
+# 创建异步任务 传入图片公网地址
+def create_image_task(prompt, image_public_url, seed=None):
     if seed is None:
         seed = 42
 
-    image_public_url = "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg"
-    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
     url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation"
 
     headers = {
@@ -53,20 +57,18 @@ def create_image_task(prompt, seed=None):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         result = resp.json()
-        print("✅ 创建任务成功:", result.get("task_id"))
-        return result.get("output", {}).get("task_id")
+        task_id = result.get("output", {}).get("task_id")
+        print("✅ 创建任务成功 task_id:", task_id)
+        return task_id
     except Exception as e:
         print("❌ 创建任务失败:", e)
         return None
 
-# ==============================================================================
-# 稳定版：查询任务结果（安全、不崩溃）
-# ==============================================================================
+# 查询任务结果 带容错
 def get_task_result(task_id):
     if not task_id:
         return None
 
-    API_KEY = "sk-317656c58f1e43d89ebe5a6d594ad274"
     query_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
 
     for _ in range(15):
@@ -80,14 +82,14 @@ def get_task_result(task_id):
             if status == "SUCCEEDED":
                 return task["output"]["results"][0]["url"]
             if status in ["FAILED", "CANCELED"]:
+                print(f"任务 {task_id} 生成失败")
                 return None
-        except:
+        except Exception as e:
+            print(f"轮询异常 重试中: {e}")
             continue
+    print(f"任务 {task_id} 超时")
     return None
 
-# ==============================================================================
-# 核心：先生成所有任务 → 再统一查结果（最稳定模式）
-# ==============================================================================
 @app.route('/generate', methods=['POST'])
 def generate():
     session['current_generated_files'] = []
@@ -111,21 +113,23 @@ def generate():
     final_main_prompt = f"{main_prompt}, {suffix}"
     final_variant_prompt = f"{variant_prompt}, high quality, photorealistic"
 
-    # ===================== 第一步：批量创建所有任务（超快） =====================
+    # 拼接你VPS的公网图片地址
+    source_image_public_url = f"{VPS_PUBLIC_BASE_URL}/uploads/{uploaded_filename}"
+    print("使用原图公网地址:", source_image_public_url)
+
     task_list = []
     print("==== 开始批量创建任务 ====")
     
     for i in range(main_count):
-        task_id = create_image_task(final_main_prompt)
+        task_id = create_image_task(final_main_prompt, source_image_public_url)
         if task_id:
             task_list.append({"type": "main", "task_id": task_id, "prompt": final_main_prompt})
 
     for i in range(5):
-        task_id = create_image_task(final_variant_prompt)
+        task_id = create_image_task(final_variant_prompt, source_image_public_url)
         if task_id:
             task_list.append({"type": "variant", "task_id": task_id, "prompt": final_variant_prompt})
 
-    # ===================== 第二步：批量查询所有结果（超稳） =====================
     generated_images = []
     print("==== 开始查询结果 ====")
 
@@ -154,10 +158,6 @@ def generate():
 
     return jsonify({"images": [img["url"] for img in generated_images]})
 
-# ==============================================================================
-# 以下代码完全保持你原来的逻辑，没有任何改动
-# ==============================================================================
-
 @app.route('/upload', methods=['POST'])
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
@@ -178,6 +178,7 @@ def upload_file():
 def download_zip():
     data = request.get_json()
     images = data.get('images', [])
+
     if not images:
         return jsonify({"error": "No images to download"}), 400
 
@@ -190,11 +191,19 @@ def download_zip():
                 if img_url:
                     r = requests.get(img_url)
                     if r.status_code == 200:
-                        zf.writestr(f"{img_id}.png", r.content)
-            except:
+                        filename = f"{img_id}.png"
+                        zf.writestr(filename, r.content)
+            except Exception as e:
+                print(f"Error adding image to zip: {e}")
                 continue
+
     memory_file.seek(0)
-    return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name='ecommerce_images.zip')
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='ecommerce_images.zip'
+    )
 
 @app.route('/')
 def home():
@@ -218,10 +227,18 @@ def download_zip_legacy():
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for img_path in session_images:
             if os.path.exists(img_path):
-                zipf.write(img_path, os.path.basename(img_path))
+                filename = os.path.basename(img_path)
+                zipf.write(img_path, filename)
 
     memory_file.seek(0)
-    response = make_response(send_file(memory_file, as_attachment=True, download_name='本次生成图片.zip'))
+    response = make_response(
+        send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='本次生成图片.zip'
+        )
+    )
     response.headers['Content-Type'] = 'application/zip'
     return response
 
