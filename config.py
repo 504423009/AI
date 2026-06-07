@@ -14,4 +14,4 @@ class Config:
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
     # 👇 只新增了这一行，用来配置 Fal.ai API Key
-    FAL_KEY = os.environ.get('FAL_KEY') or 'ff05126c-684b-4d8c-961f-9bf57bf0fec9:3c39fd05b24ae075c9d195d73dd38f61'
+    FAL_KEY = os.environ.get('FAL_KEY') or 'ff05126c-6000-ae075c9d195d73dd38f61'
