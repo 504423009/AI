@@ -8,42 +8,6 @@ from werkzeug.utils import secure_filename
 import zipfile
 from io import BytesIO
 
-app = Flask(__name__)
-app.secret_key = 'any-random-string-you-like'  # 随便写个字符串，比如 'my-secret-123'
-app.config.from_object(Config)
-CORS(app)
-
-# 确保目录存在
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-
-# 允许的文件类型
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def generate_image(prompt, image_url, seed=None, strength=0.35):
-    """调用 Fal.ai Flux Dev 生成图片 - 已优化产品保留"""
-    url = "https://fal.run/fal-ai/flux/dev"
-    headers = {
-        "Authorization": f"Key {app.config['FAL_KEY']}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "prompt": prompt,
-        "image_url": image_url,
-        "enable_safety_checker": False,      # 产品图建议关闭
-        "output_format": "png",
-        "image_strength": strength,          # 关键：控制改动幅度
-        "num_inference_steps": 28,
-        "guidance_scale": 3.5,
-    }
-    
-    if seed:
-        payload["seed"] = seed
-
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=90)
         if response.status_code == 200:
